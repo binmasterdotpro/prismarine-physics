@@ -95,8 +95,7 @@ function Physics (mcData, world) {
       maxUp: 0.7
     },
     slowFalling: 0.125,
-    movementSpeedAttribute: mcData.attributesByName.movementSpeed.resource,
-    sprintingUUID: '662a6b8d-da3e-4c1c-8813-96ea6097278d' // SPEED_MODIFIER_SPRINTING_UUID is from LivingEntity.java
+    movementSpeedAttribute: mcData.attributesByName.movementSpeed.resource
   }
 
   if (supportFeature('independentLiquidGravity')) {
@@ -552,11 +551,12 @@ function Physics (mcData, world) {
         }
         // Client-side sprinting (don't rely on server-side sprinting)
         // setSprinting in LivingEntity.java
-        playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, physics.sprintingUUID) // always delete sprinting (if it exists)
+        playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, "662a6b8d-da3e-4c1c-8813-96ea6097278d") // always delete sprinting (if it exists)
+        playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, "minecraft:sprinting") // 1.21.5?
         if (entity.control.sprint) {
           if (!attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
             playerSpeedAttribute = attribute.addAttributeModifier(playerSpeedAttribute, {
-              uuid: physics.sprintingUUID,
+              uuid: "minecraft:sprinting",
               amount: physics.sprintSpeed,
               operation: 2
             })
