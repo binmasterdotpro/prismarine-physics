@@ -839,7 +839,9 @@ class PlayerState {
     if (boots && boots.nbt) {
       const simplifiedNbt = nbt.simplify(boots.nbt)
       const enchantments = simplifiedNbt.Enchantments ?? simplifiedNbt.ench ?? []
-      this.depthStrider = getEnchantmentLevel(mcData, 'depth_strider', enchantments)
+      const enchantmentsMap = boots?.componentMap.get("enchantments")
+      const strider = enchantmentsMap?.data?.enchantments?.find(({id, level}) => id === 7)
+      this.depthStrider = strider ? strider.level : getEnchantmentLevel(mcData, 'depth_strider', enchantments)
     } else {
       this.depthStrider = 0
     }
