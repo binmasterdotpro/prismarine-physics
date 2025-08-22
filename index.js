@@ -474,7 +474,7 @@ function Physics (mcData, world) {
       let horizontalInertia = inertia
 
       if (entity.isInWater) {
-        let strider = Math.min(entity.depthStrider, 1)
+        let strider = Math.min(entity.depthStrider, 3)
         if (!entity.onGround) {
           strider *= 0.5
         }
