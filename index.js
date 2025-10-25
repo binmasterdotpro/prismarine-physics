@@ -3,6 +3,7 @@ const AABB = require('./lib/aabb')
 const math = require('./lib/math')
 const features = require('./lib/features')
 const attribute = require('./lib/attribute')
+const nbt = require('prismarine-nbt')
 
 function makeSupportFeature(mcData) {
     return feature => features.some(({
@@ -62,9 +63,9 @@ function Physics(mcData, world) {
         ladderClimbSpeed: 0.2,
         playerHalfWidth: f32(0.3),
         playerHeight: f32(1.8),
-        waterInertia: 0.8,
+        waterInertia: Math.fround(0.8),
         lavaInertia: 0.5,
-        baseLiquidAcceleration: f32(0.02),
+        baseLiquidAcceleration: Math.fround(0.02),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/Block.java#L291
         defaultSlipperiness: 0.6,
         outOfLiquidImpulse: 0.3,
@@ -534,24 +535,19 @@ function Physics(mcData, world) {
         const attributeSpeed = attribute.getAttributeValue(playerSpeedAttribute)
 
         if (playerState.isInWater) {
-            // Water / Lava movement
+            // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1701
             const lastY = pos.y
-            let inertia = f32(physics.waterInertia)
+            let inertia = physics.waterInertia
             let acceleration = physics.baseLiquidAcceleration
-            let strider = f32(Math.min(playerState.depthStrider, 3))
+            let strider = Math.min(playerState.depthStrider, 3)
 
             if (!playerState.onGround) {
-                strider = strider * f32(0.5)
+                strider = Math.fround(strider * Math.fround(0.5))
             }
 
             if (strider > 0) {
-                inertia += (f32(physics.magicFriction) - inertia) * f32(strider / 3)
-                // todo: this is determined by the "ai move speed"
-                // for players, this seems to be a dynamic value based on the player's move speed
-                // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L634
-                // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/SharedMonsterAttributes.java#L21
-                // by default, this seems to be 0.7D, but we should be weary of change
-                acceleration += (0.7 - acceleration) * strider / 3
+                inertia = Math.fround(inertia + (Math.fround(0.54600006) - inertia) * strider / 3)
+                acceleration = Math.fround(acceleration + (attributeSpeed - acceleration) * strider / 3)
             }
 
             moveFlying(playerState, strafe, forward, acceleration)
@@ -793,6 +789,19 @@ class PlayerState {
         const effects = bot.entity.effects
 
         this.jumpBoost = getEffectLevel(mcData, 'JumpBoost', effects)
+
+        // armour enchantments
+        const boots = bot.inventory.slots[8]
+
+        if (boots && boots.nbt) {
+            const simplifiedNbt = nbt.simplify(boots.nbt)
+            const enchantments = simplifiedNbt.Enchantments ?? simplifiedNbt.ench ?? []
+            const enchantmentsMap = boots?.componentMap?.get("enchantments")
+            const strider = enchantmentsMap?.data?.enchantments?.find(({id, level}) => id === 7)
+            this.depthStrider = strider ? strider.level : getEnchantmentLevel(mcData, 'depth_strider', enchantments)
+        } else {
+            this.depthStrider = 0
+        }
     }
 
     apply(bot) {
