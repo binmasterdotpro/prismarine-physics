@@ -64,11 +64,11 @@ function Physics(mcData, world) {
         playerHalfWidth: f32(0.3),
         playerHeight: f32(1.8),
         waterInertia: Math.fround(0.8),
-        lavaInertia: 0.5,
+        lavaInertia: Math.fround(0.5),
         baseLiquidAcceleration: Math.fround(0.02),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/Block.java#L291
         defaultSlipperiness: 0.6,
-        outOfLiquidImpulse: 0.3,
+        outOfLiquidImpulse: Math.fround(0.3),
         autojumpCooldown: 10, // ticks (0.5s)
         bubbleColumnSurfaceDrag: {
             down: 0.03,
