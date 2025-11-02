@@ -525,7 +525,7 @@ function Physics(mcData, world) {
         // setSprinting in LivingEntity.java
         playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, physics.sprintingUUID) // always delete sprinting (if it exists)
 
-        const isSprintingApplicable = forward > 0 && !playerState.isCollidedHorizontally && !playerState.control.sneak
+        const isSprintingApplicable = forward > 0 && !playerState.control.sneak
 
         if (playerState.control.sprint && isSprintingApplicable && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
             playerSpeedAttribute = attribute.addAttributeModifier(playerSpeedAttribute, {
