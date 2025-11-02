@@ -524,7 +524,10 @@ function Physics(mcData, world) {
         // Client-side sprinting (don't rely on server-side sprinting)
         // setSprinting in LivingEntity.java
         playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, physics.sprintingUUID) // always delete sprinting (if it exists)
-        if (playerState.control.sprint && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
+
+        const isSprintingApplicable = forward > 0 && !playerState.isCollidedHorizontally && !playerState.control.sneak
+
+        if (playerState.control.sprint && isSprintingApplicable && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
             playerSpeedAttribute = attribute.addAttributeModifier(playerSpeedAttribute, {
                 uuid: physics.sprintingUUID,
                 amount: physics.sprintSpeed,
