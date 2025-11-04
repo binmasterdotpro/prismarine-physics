@@ -19,8 +19,7 @@ const f32 = (x) => x
 const SIN_TABLE = new Array(65536);
 const DEG_TO_RAD = Math.PI / 180.0;
 
-for (let i = 0; i < 65536; i++)
-{
+for (let i = 0; i < 65536; i++) {
     SIN_TABLE[i] = Math.sin(Math.fround(i * Math.PI * 2.0 / 65536.0));
 }
 
@@ -200,6 +199,212 @@ function Physics(mcData, world) {
         return baseBoundingBox
     }
 
+    function rotateY(facing, right = true) {
+        // 0=north, 1=east, 2=south, 3=west
+        return right ? (facing + 1) % 4 : (facing + 3) % 4
+    }
+
+    const FACING_MAP = {
+        north: 0,
+        east: 1,
+        south: 2,
+        west: 3
+    }
+
+    function getFacing(block) {
+        const facing = block._properties.facing
+        return FACING_MAP[facing]
+    }
+
+    function isTopHalf(block) {
+        return block._properties.half === 'top'
+    }
+
+    /**
+     * Compute stair shape: straight / inner_left / inner_right / outer_left / outer_right
+     */
+    function computeStairShape(world, pos, facing, halfTop) {
+        const forwardPos = pos.plus(CARDINAL[facing])
+        const backPos = pos.minus(CARDINAL[facing])
+        const forward = world.getBlock(forwardPos)
+        const back = world.getBlock(backPos)
+
+        function sameHalf(block) {
+            return block && stairIds.has(block.name) && isTopHalf(block) === halfTop
+        }
+
+        // ---- OUTER CORNERS ----
+        if (forward && sameHalf(forward)) {
+            const nfacing = getFacing(forward)
+            if (nfacing === rotateY(facing, false)) return 'outer_left'
+            if (nfacing === rotateY(facing, true)) return 'outer_right'
+        }
+
+        // ---- INNER CORNERS ----
+        if (back && sameHalf(back)) {
+            const nfacing = getFacing(back)
+            if (nfacing === rotateY(facing, false)) return 'inner_left'
+            if (nfacing === rotateY(facing, true)) return 'inner_right'
+        }
+
+        return 'straight'
+    }
+
+    /**
+     * Compute AABBs for a stair block
+     */
+    function computeStairBB(world, pos, block) {
+        const facing = getFacing(block)
+        const halfTop = isTopHalf(block)
+        const shape = computeStairShape(world, pos, facing, halfTop)
+
+        const baseY = halfTop ? 0.5 : 0.0
+        const topY = halfTop ? 1.0 : 0.5
+        const stepYMin = halfTop ? 0.0 : 0.5
+        const stepYMax = halfTop ? 0.5 : 1.0
+
+        const boxes = []
+
+        // --- STRAIGHT / BASE STEP ---
+        if (shape === 'straight') {
+            boxes.push(...straightBoxes(facing, baseY, topY, stepYMin, stepYMax))
+        }
+
+        // --- OUTER CORNERS (convex) ---
+        else if (shape === 'outer_left' || shape === 'outer_right') {
+            boxes.push(...outerCornerBoxes(shape, facing, baseY, topY, stepYMin, stepYMax))
+        }
+
+        // --- INNER CORNERS (concave) ---
+        else if (shape === 'inner_left' || shape === 'inner_right') {
+            boxes.push(...innerCornerBoxes(shape, facing, baseY, topY, stepYMin, stepYMax))
+        }
+
+        return boxes
+    }
+
+    // === Base geometry tables ===
+    // Straight stairs (two parts)
+    function straightBoxes(facing, baseY, topY, stepYMin, stepYMax) {
+        switch (facing) {
+            case 0: // north
+                return [
+                    [0, baseY, 0.5, 1, topY, 1],
+                    [0, stepYMin, 0, 1, stepYMax, 0.5]
+                ]
+            case 1: // east
+                return [
+                    [0, baseY, 0, 1, topY, 1],
+                    [0.5, stepYMin, 0, 1, stepYMax, 1]
+                ]
+            case 2: // south
+                return [
+                    [0, baseY, 0, 1, topY, 1],
+                    [0, stepYMin, 0.5, 1, stepYMax, 1]
+                ]
+            case 3: // west
+                return [
+                    [0.5, baseY, 0, 1, topY, 1],
+                    [0, stepYMin, 0, 0.5, stepYMax, 1]
+                ]
+        }
+    }
+
+    // Outer corners (smaller L-shape)
+    function outerCornerBoxes(shape, facing, baseY, topY, stepYMin, stepYMax) {
+        const right = shape === 'outer_right'
+        switch (facing) {
+            case 0: // north
+                return right
+                    ? [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                    ]
+                    : [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                    ]
+            case 1: // east
+                return right
+                    ? [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                    ]
+            case 2: // south
+                return right
+                    ? [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                    ]
+            case 3: // west
+                return right
+                    ? [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                    ]
+                    : [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                    ]
+        }
+    }
+
+    // Inner corners (larger L-shape)
+    function innerCornerBoxes(shape, facing, baseY, topY, stepYMin, stepYMax) {
+        const left = shape === 'inner_left'
+        switch (facing) {
+            case 0: // north
+                return left
+                    ? [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                    ]
+                    : [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                    ]
+            case 1: // east
+                return left
+                    ? [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                    ]
+            case 2: // south
+                return left
+                    ? [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                    ]
+            case 3: // west
+                return left
+                    ? [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                    ]
+                    : [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                    ]
+        }
+    }
+
+
     function getSurroundingBBs(world, queryBB) {
         const surroundingBBs = []
         const cursor = new Vec3(0, 0, 0)
@@ -212,6 +417,9 @@ function Physics(mcData, world) {
                         let shapes = block.shapes
                         if (wallIds.has(block.name)) {
                             shapes = computeWallBB(world, blockPos)
+                        }
+                        if (stairIds.has(block.name)) {
+                            shapes = computeStairBB(world, blockPos, block)
                         }
                         for (const shape of shapes) {
                             const blockBB = new AABB(shape[0], shape[1], shape[2], shape[3], shape[4], shape[5])
@@ -475,13 +683,11 @@ function Physics(mcData, world) {
         let blockPos = pos.offset(0, -0.2, 0).floored()
         let blockAtFeet = world.getBlock(blockPos)
 
-        if (blockAtFeet?.type === 0)
-        {
+        if (blockAtFeet?.type === 0) {
             const downBlock = world.getBlock(blockPos.offset(0, -1, 0))
 
             // warn: string comp might be unreliable and cause performance issues!
-            if (downBlock.name.endsWith('wall') || downBlock.name.startsWith('fence'))
-            {
+            if (downBlock.name.endsWith('wall') || downBlock.name.startsWith('fence')) {
                 blockAtFeet = downBlock
             }
         }
