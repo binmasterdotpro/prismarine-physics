@@ -130,6 +130,76 @@ function Physics(mcData, world) {
         pos.z = (bb.minZ + bb.maxZ) / 2.0
     }
 
+    const wallIds = new Set([
+        'cobblestone_wall'
+    ])
+
+    const stairIds = new Set([
+        'oak_stairs',
+        'stone_stairs',
+        'brick_stairs',
+        'stone_brick_stairs',
+        'nether_brick_stairs',
+        'sandstone_stairs',
+        'spruce_stairs',
+        'birch_stairs',
+        'jungle_stairs',
+        'quartz_stairs',
+        'acacia_stairs',
+        'dark_oak_stairs',
+        'red_sandstone_stairs',
+        'purpur_stairs',
+    ])
+
+    const CARDINAL_NOMENCLATURE = [
+        'north',
+        'east',
+        'south',
+        'west'
+    ]
+
+    const CARDINAL = [
+        // north -z
+        new Vec3(0, 0, -1),
+        // east +x
+        new Vec3(1, 0, 0),
+        // south +z
+        new Vec3(0, 0, 1),
+        // west -x
+        new Vec3(-1, 0, 0)
+    ]
+
+    function updateWallBB(connectDirection, boundingBox) {
+        // either we do or undo the connection operation
+        switch (connectDirection) {
+            case 0: // north
+                boundingBox[0][2] = 0.0
+                break
+            case 1: // east
+                boundingBox[0][3] = 1.0
+                break
+            case 2: // south
+                boundingBox[0][5] = 1.0
+                break
+            case 3: // west
+                boundingBox[0][0] = 0.0
+                break
+        }
+    }
+
+    function computeWallBB(world, origin) {
+        const baseBoundingBox = [[0.25, 0.0, 0.25, 0.75, 1.5, 0.75]]
+
+        // check north, east, south, west for neighboring walls to connect to
+        for (let i = 0; i < CARDINAL.length; i++) {
+            // update the wall properties and the bounding box
+            const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
+            if (!neighborBlock || !wallIds.has(neighborBlock.name)) continue
+            updateWallBB(i, baseBoundingBox)
+        }
+        return baseBoundingBox
+    }
+
     function getSurroundingBBs(world, queryBB) {
         const surroundingBBs = []
         const cursor = new Vec3(0, 0, 0)
@@ -139,7 +209,11 @@ function Physics(mcData, world) {
                     const block = world.getBlock(cursor)
                     if (block) {
                         const blockPos = block.position
-                        for (const shape of block.shapes) {
+                        let shapes = block.shapes
+                        if (wallIds.has(block.name)) {
+                            shapes = computeWallBB(world, blockPos)
+                        }
+                        for (const shape of shapes) {
                             const blockBB = new AABB(shape[0], shape[1], shape[2], shape[3], shape[4], shape[5])
                             blockBB.offset(blockPos.x, blockPos.y, blockPos.z)
                             surroundingBBs.push(blockBB)
