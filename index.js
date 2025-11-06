@@ -18,6 +18,7 @@ const f32 = (x) => x
 
 const SIN_TABLE = new Array(65536);
 const DEG_TO_RAD = Math.PI / 180.0;
+const RAD_TO_DEG = 180.0 / Math.PI;
 
 for (let i = 0; i < 65536; i++) {
     SIN_TABLE[i] = Math.sin(Math.fround(i * Math.PI * 2.0 / 65536.0));
@@ -41,13 +42,13 @@ function Physics(mcData, world) {
         // this.motionY -= 0.08D;, EntityLivingBase.java
         gravity: 0.08,
         // this.motionY *= 0.9800000190734863D;, EntityLivingBase.java. 32 bit equivalent of 0.98
-        airdrag: 0.9800000190734863,
+        airdrag: Math.fround(0.98),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L163C5-L164C40
         playerSpeed: Math.fround(0.1),
         airborneAcceleration: Math.fround(0.02),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1610
         airborneInertia: 0.91,
-        sprintSpeed: 0.3,
+        sprintSpeed: Math.fround(0.3),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
         sneakSpeed: 0.3,
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1974
@@ -133,6 +134,25 @@ function Physics(mcData, world) {
         'cobblestone_wall'
     ])
 
+    const fenceIds = new Set([
+        'oak_fence',
+        'spruce_fence',
+        'birch_fence',
+        'jungle_fence',
+        'acacia_fence',
+        'dark_oak_fence',
+        'nether_brick_fence',
+    ])
+
+    const fenceGateIds = new Set([
+        'oak_fence_gate',
+        'spruce_fence_gate',
+        'birch_fence_gate',
+        'jungle_fence_gate',
+        'acacia_fence_gate',
+        'dark_oak_fence_gate',
+    ])
+
     const stairIds = new Set([
         'oak_stairs',
         'stone_stairs',
@@ -169,7 +189,6 @@ function Physics(mcData, world) {
     ]
 
     function updateWallBB(connectDirection, boundingBox) {
-        // either we do or undo the connection operation
         switch (connectDirection) {
             case 0: // north
                 boundingBox[0][2] = 0.0
@@ -186,6 +205,27 @@ function Physics(mcData, world) {
         }
     }
 
+    function updateFenceBB(connectDirection, boundingBox) {
+        switch (connectDirection) {
+            case 0: // north (-z)
+                // extends from center to full north edge
+                boundingBox.push([0.375, 0.0, 0.0, 0.625, 1.5, 0.375])
+                break
+            case 1: // east (+x)
+                // extends from center to full east edge
+                boundingBox.push([0.625, 0.0, 0.375, 1.0, 1.5, 0.625])
+                break
+            case 2: // south (+z)
+                // extends from center to full south edge
+                boundingBox.push([0.375, 0.0, 0.625, 0.625, 1.5, 1.0])
+                break
+            case 3: // west (-x)
+                // extends from center to full west edge
+                boundingBox.push([0.0, 0.0, 0.375, 0.375, 1.5, 0.625])
+                break
+        }
+    }
+
     function computeWallBB(world, origin) {
         const baseBoundingBox = [[0.25, 0.0, 0.25, 0.75, 1.5, 0.75]]
 
@@ -195,6 +235,17 @@ function Physics(mcData, world) {
             const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
             if (!neighborBlock || !wallIds.has(neighborBlock.name)) continue
             updateWallBB(i, baseBoundingBox)
+        }
+        return baseBoundingBox
+    }
+
+    function computeFenceBB(world, origin) {
+        const baseBoundingBox = [[0.375,0.0,0.375,0.625,1.5,0.625]]
+        for (let i = 0; i < CARDINAL.length; i++) {
+            // update the fence properties and the bounding box
+            const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
+            if (!neighborBlock || (!fenceIds.has(neighborBlock.name) && !fenceGateIds.has(neighborBlock.name))) continue
+            updateFenceBB(i, baseBoundingBox)
         }
         return baseBoundingBox
     }
@@ -357,52 +408,80 @@ function Physics(mcData, world) {
         }
     }
 
-    // Inner corners (larger L-shape)
+    // Inner corners (concave) — base + two step strips
     function innerCornerBoxes(shape, facing, baseY, topY, stepYMin, stepYMax) {
         const left = shape === 'inner_left'
         switch (facing) {
-            case 0: // north
+            case 0: // north (front = z[0..0.5], left = west x[0..0.5], right = east x[0.5..1])
                 return left
                     ? [
+                        // base slab (back half)
                         [0, baseY, 0.5, 1, topY, 1],
-                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                        // facing strip (north/front)
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
+                        // side strip (west/left)
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
                     ]
                     : [
                         [0, baseY, 0.5, 1, topY, 1],
-                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
+                        // side strip (east/right)
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
                     ]
-            case 1: // east
+
+            case 1: // east (front = x[0.5..1], left = north z[0..0.5], right = south z[0.5..1])
                 return left
                     ? [
+                        // base slab (match your straight base for east = full slab)
                         [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                        // facing strip (east/front)
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
+                        // side strip (north/left)
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
                     ]
                     : [
                         [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
+                        // side strip (south/right)
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
                     ]
-            case 2: // south
+
+            case 2: // south (front = z[0.5..1], left = east x[0.5..1], right = west x[0..0.5])
                 return left
                     ? [
+                        // base slab (match your straight base for south = full slab)
                         [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                        // facing strip (south/front)
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
+                        // side strip (east/left)
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
                     ]
                     : [
                         [0, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
+                        // side strip (west/right)
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
                     ]
-            case 3: // west
+
+            case 3: // west (front = x[0..0.5], left = south z[0.5..1], right = north z[0..0.5])
                 return left
                     ? [
+                        // base slab (your straight base for west = x[0.5..1])
                         [0.5, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                        // facing strip (west/front)
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
+                        // side strip (south/left)
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
                     ]
                     : [
                         [0.5, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
+                        // side strip (north/right)
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
                     ]
         }
     }
+
 
 
     function getSurroundingBBs(world, queryBB) {
@@ -417,9 +496,15 @@ function Physics(mcData, world) {
                         let shapes = block.shapes
                         if (wallIds.has(block.name)) {
                             shapes = computeWallBB(world, blockPos)
-                        }
-                        if (stairIds.has(block.name)) {
+                        } else if (stairIds.has(block.name)) {
                             shapes = computeStairBB(world, blockPos, block)
+                        } else if (fenceIds.has(block.name)) {
+                            shapes = computeFenceBB(world, blockPos)
+                        } else if (block.name === 'snow_layer' && block._properties.layers === 8) {
+                            const blockAbove = world.getBlock(blockPos.offset(0, 1, 0))
+                            if (blockAbove && blockAbove.name === 'snow_layer') {
+                                shapes = [[0, 0, 0, 1, 1, 1]]
+                            }
                         }
                         for (const shape of shapes) {
                             const blockBB = new AABB(shape[0], shape[1], shape[2], shape[3], shape[4], shape[5])
@@ -437,6 +522,12 @@ function Physics(mcData, world) {
     physics.simulatePlayer = (playerState, world) => {
         const {motion, pos} = playerState
         if (playerState.jumpTicks > 0) playerState.jumpTicks--
+        if (playerState.yaw) {
+            playerState.yawDegrees = Math.PI - playerState.yaw * RAD_TO_DEG
+        }
+        if (playerState.pitch) {
+            playerState.pitchDegrees = -playerState.pitch * RAD_TO_DEG
+        }
 
         const waterBB = getPlayerBB(pos).contract(0.001, 0.401, 0.001)
         const lavaBB = getPlayerBB(pos).contract(0.1, 0.4, 0.1)
@@ -745,42 +836,18 @@ function Physics(mcData, world) {
             moveForward = moveForward * speed;
             const sin = sin32(playerState.yawDegrees * DEG_TO_RAD)
             const cos = cos32(playerState.yawDegrees * DEG_TO_RAD)
-            motion.x += Math.fround(-moveStrafe * cos - moveForward * sin)
-            motion.z += Math.fround(moveForward * cos - moveStrafe * sin)
+            motion.x = Math.fround(motion.x + -moveStrafe * cos - moveForward * sin)
+            motion.z = Math.fround(motion.z + moveForward * cos - moveStrafe * sin)
         }
     }
-
-    const climbableTrapdoorFeature = supportFeature('climbableTrapdoor')
 
     function isOnLadder(world, pos) {
         const block = world.getBlock(pos)
         if (!block) {
             return false
         }
-        if (block.type === ladderId || block.type === vineId) {
-            return true
-        }
+        return block.type === ladderId || block.type === vineId;
 
-        // Since 1.9, when a trapdoor satisfies the following conditions, it also becomes climbable:
-        //  1. The trapdoor is placed directly above a ladder.
-        //  2. The trapdoor is opened.
-        //  3. The trapdoor and the ladder directly below it face the same direction.
-        if (climbableTrapdoorFeature && trapdoorIds.has(block.type)) {
-            const blockBelow = world.getBlock(pos.offset(0, -1, 0))
-            if (blockBelow.type !== ladderId) {
-                return false
-            } // condition 1.
-            const blockProperties = block._properties
-            if (!blockProperties.open) {
-                return false
-            } // condition 2.
-            if (blockProperties.facing !== blockBelow.getProperties().facing) {
-                return false
-            } // condition 3
-            return true
-        }
-
-        return false
     }
 
     function isOffsetPositionInLiquid(world, pos) {
@@ -1060,9 +1127,6 @@ class PlayerState {
 
         // Input only (not modified)
         this.attributes = bot.entity.attributes
-        // both rotational values in radians
-        this.yaw = bot.entity.yaw
-        this.pitch = bot.entity.pitch
         // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
         this.yawDegrees = Math.fround(bot.entity.yawDegrees)
         this.pitchDegrees = Math.fround(bot.entity.pitchDegrees)
