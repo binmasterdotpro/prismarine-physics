@@ -86,7 +86,7 @@ function Physics(mcData, world) {
         sprintingUUID: '662a6b8d-da3e-4c1c-8813-96ea6097278d',
         // default slipperiness * friction
         magicFriction: 0.546,
-        magicFrictionCubed: 0.162771336
+        magicFrictionCubed: 0.16277136
     }
     const waterIds = [blocksByName.water.id, blocksByName.flowing_water ? blocksByName.flowing_water.id : -1]
     const lavaIds = [blocksByName.lava.id, blocksByName.flowing_lava ? blocksByName.flowing_lava.id : -1]
