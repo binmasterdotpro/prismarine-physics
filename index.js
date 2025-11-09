@@ -864,7 +864,7 @@ function Physics(mcData, world) {
             motion.z = motion.z.multiply(new JavaDouble(inertia))
             motion.y = motion.y.subtract(physics.waterGravity)
             if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
-                motion.y = physics.outOfLiquidImpulse // jump out of liquid
+                motion.y = new JavaDouble(physics.outOfLiquidImpulse) // jump out of liquid
             }
         } else if (playerState.isInLava) {
             const lastY = pos.y
@@ -875,7 +875,7 @@ function Physics(mcData, world) {
             motion.z = motion.z.multiply(new JavaDouble(physics.lavaInertia))
             motion.y = motion.y.subtract(physics.lavaGravity)
             if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
-                motion.y = physics.outOfLiquidImpulse
+                motion.y = new JavaDouble(physics.outOfLiquidImpulse)
             }
         } else {
             // Normal movement
