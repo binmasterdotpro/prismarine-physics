@@ -1,36 +1,20 @@
 const Vec3 = require('vec3').Vec3
 const AABB = require('./lib/aabb')
-const math = require('./lib/math')
 const features = require('./lib/features')
 const attribute = require('./lib/attribute')
 const nbt = require('prismarine-nbt')
+const {JavaFloat, JavaDouble, sin32, cos32, JavaInt, Vec3Double} = require("./lib/javamath");
 
 function makeSupportFeature(mcData) {
     return feature => features.some(({
-                                         name,
-                                         versions
-                                     }) => name === feature && versions.includes(mcData.version.majorVersion))
+        name,
+        versions
+    }) => name === feature && versions.includes(mcData.version.majorVersion))
 }
 
-// optional: toggling f32 for less precision but more java-like behavior (still not very accurate)
-// const f32 = Math.fround
-const f32 = (x) => x
-
-const SIN_TABLE = new Array(65536);
-const DEG_TO_RAD = Math.PI / 180.0;
+// https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1578C42-L1578C53
+const DEG_TO_RAD = new JavaFloat(Math.PI).divide(new JavaFloat(180.0))
 const RAD_TO_DEG = 180.0 / Math.PI;
-
-for (let i = 0; i < 65536; i++) {
-    SIN_TABLE[i] = Math.sin(Math.fround(i * Math.PI * 2.0 / 65536.0));
-}
-
-function sin32(x) {
-    return SIN_TABLE[Math.floor(x * 10430.378) & 65535];
-}
-
-function cos32(x) {
-    return SIN_TABLE[(Math.floor(x * 10430.378) + 16384) & 65535];
-}
 
 function Physics(mcData, world) {
     const supportFeature = makeSupportFeature(mcData)
@@ -40,84 +24,68 @@ function Physics(mcData, world) {
         yawSpeed: 60.0,
         pitchSpeed: 30.0,
         // this.motionY -= 0.08D;, EntityLivingBase.java
-        gravity: 0.08,
+        gravity: new JavaDouble(0.08),
         // this.motionY *= 0.9800000190734863D;, EntityLivingBase.java. 32 bit equivalent of 0.98
-        airdrag: Math.fround(0.98),
+        airdrag: new JavaFloat(0.98),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L163C5-L164C40
-        playerSpeed: Math.fround(0.1),
-        airborneAcceleration: Math.fround(0.02),
+        playerSpeed: new JavaFloat(0.1),
+        airborneAcceleration: new JavaFloat(0.02),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1610
-        airborneInertia: 0.91,
-        sprintSpeed: Math.fround(0.3),
+        airborneInertia: new JavaFloat(0.91),
+        sprintSpeed: new JavaFloat(0.3),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
-        sneakSpeed: 0.3,
+        sneakSpeed: new JavaDouble(0.3),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1974
-        negligeableVelocity: 0.005,
-        negligeableFlyingSpeed: f32(1.0E-4),
+        negligeableVelocity: new JavaDouble(0.005),
+        negligeableFlyingSpeed: new JavaFloat(1.0E-4),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L208
-        stepHeight: f32(0.6), // how much height can the bot step on without jump
-        ladderMaxSpeed: f32(0.15),
+        stepHeight: new JavaFloat(0.6), // how much height can the bot step on without jump
+        ladderMaxSpeed: new JavaFloat(0.15),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1594
-        liquidMotionY: 0.03999999910593033,
-        jumpMotionY: Math.fround(0.42),
-        ladderClimbSpeed: 0.2,
-        playerHalfWidth: f32(0.3),
-        playerHeight: f32(1.8),
-        waterInertia: Math.fround(0.8),
-        lavaInertia: Math.fround(0.5),
-        baseLiquidAcceleration: Math.fround(0.02),
+        liquidMotionY: new JavaDouble(0.03999999910593033),
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1559
+        jumpMotionY: new JavaFloat(0.42),
+        ladderClimbSpeed: new JavaDouble(0.15),
+        // todo: DETERMINE THESE TYPES!
+        playerHalfWidth: new JavaDouble(0.3),
+        playerHeight: new JavaDouble(1.8),
+        waterInertia: new JavaFloat(0.8),
+        lavaInertia: new JavaFloat(0.5),
+        baseLiquidAcceleration: new JavaFloat(0.02),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/Block.java#L291
-        defaultSlipperiness: 0.6,
-        outOfLiquidImpulse: Math.fround(0.3),
+        defaultSlipperiness: new JavaFloat(0.6),
+        outOfLiquidImpulse: new JavaFloat(0.3),
         autojumpCooldown: 10, // ticks (0.5s)
-        bubbleColumnSurfaceDrag: {
-            down: 0.03,
-            maxDown: -0.9,
-            up: 0.1,
-            maxUp: 1.8
-        },
-        bubbleColumnDrag: {
-            down: 0.03,
-            maxDown: -0.3,
-            up: 0.06,
-            maxUp: 0.7
-        },
         movementSpeedAttribute: mcData.attributesByName.movementSpeed.resource,
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L56
         sprintingUUID: '662a6b8d-da3e-4c1c-8813-96ea6097278d',
         // default slipperiness * friction
-        magicFriction: 0.546,
-        magicFrictionCubed: 0.16277136
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1719C30-L1719C39
+        magicFriction: new JavaFloat(0.546),
+        // seems like a different value is used for water??
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1719C28-L1719C38
+        magicFrictionWater: new JavaFloat(0.54600006),
+        magicFrictionCubed: new JavaFloat(0.16277136),
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/BlockSoulSand.java#L30
+        soulsandSpeed: new JavaDouble(0.4),
     }
+
     const waterIds = [blocksByName.water.id, blocksByName.flowing_water ? blocksByName.flowing_water.id : -1]
     const lavaIds = [blocksByName.lava.id, blocksByName.flowing_lava ? blocksByName.flowing_lava.id : -1]
     const liquidIds = waterIds.concat(lavaIds)
     const blockSlipperiness = {}
     const slimeBlockId = blocksByName.slime_block ? blocksByName.slime_block.id : blocksByName.slime.id
-    blockSlipperiness[slimeBlockId] = 0.8
-    blockSlipperiness[blocksByName.ice.id] = 0.98
-    blockSlipperiness[blocksByName.packed_ice.id] = 0.98
-    if (blocksByName.frosted_ice) { // 1.9+
-        blockSlipperiness[blocksByName.frosted_ice.id] = 0.98
-    }
-    if (blocksByName.blue_ice) { // 1.13+
-        blockSlipperiness[blocksByName.blue_ice.id] = 0.989
-    }
+    blockSlipperiness[slimeBlockId] = new JavaFloat(0.8)
+    blockSlipperiness[blocksByName.ice.id] = new JavaFloat(0.98)
+    blockSlipperiness[blocksByName.packed_ice.id] = new JavaFloat(0.98)
+
     const soulsandId = blocksByName.soul_sand.id
-    const honeyblockId = blocksByName.honey_block ? blocksByName.honey_block.id : -1 // 1.15+
     const webId = blocksByName.cobweb ? blocksByName.cobweb.id : blocksByName.web.id
     const ladderId = blocksByName.ladder.id
     const vineId = blocksByName.vine.id
-    const bubblecolumnId = blocksByName.bubble_column ? blocksByName.bubble_column.id : -1 // 1.13+
 
-    if (supportFeature('independentLiquidGravity')) {
-        physics.waterGravity = 0.02
-        physics.lavaGravity = 0.02
-    } else if (supportFeature('proportionalLiquidGravity')) {
-        physics.waterGravity = physics.gravity / 16
-        physics.lavaGravity = physics.gravity / 4
-    } else {
-        throw new Error('No liquid gravity settings, have you made sure the liquid gravity features are up to date?')
-    }
+    physics.waterGravity = new JavaDouble(0.02)
+    physics.lavaGravity = new JavaDouble(0.02)
 
     function getPlayerBB(pos) {
         const w = physics.playerHalfWidth
@@ -125,9 +93,9 @@ function Physics(mcData, world) {
     }
 
     function resetPositionToBB(bb, pos) {
-        pos.x = (bb.minX + bb.maxX) / 2.0
-        pos.y = bb.minY
-        pos.z = (bb.minZ + bb.maxZ) / 2.0
+        pos.x = new JavaDouble((bb.minX + bb.maxX) / 2.0)
+        pos.y = new JavaDouble(bb.minY)
+        pos.z = new JavaDouble((bb.minZ + bb.maxZ) / 2.0)
     }
 
     const wallIds = new Set([
@@ -240,7 +208,7 @@ function Physics(mcData, world) {
     }
 
     function computeFenceBB(world, origin) {
-        const baseBoundingBox = [[0.375,0.0,0.375,0.625,1.5,0.625]]
+        const baseBoundingBox = [[0.375, 0.0, 0.375, 0.625, 1.5, 0.625]]
         for (let i = 0; i < CARDINAL.length; i++) {
             // update the fence properties and the bounding box
             const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
@@ -367,44 +335,44 @@ function Physics(mcData, world) {
         switch (facing) {
             case 0: // north
                 return right
-                    ? [
-                        [0, baseY, 0.5, 1, topY, 1],
-                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
-                    ]
-                    : [
-                        [0, baseY, 0.5, 1, topY, 1],
-                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
-                    ]
+                  ? [
+                      [0, baseY, 0.5, 1, topY, 1],
+                      [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                  ]
+                  : [
+                      [0, baseY, 0.5, 1, topY, 1],
+                      [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                  ]
             case 1: // east
                 return right
-                    ? [
-                        [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
-                    ]
-                    : [
-                        [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
-                    ]
+                  ? [
+                      [0, baseY, 0, 1, topY, 1],
+                      [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                  ]
+                  : [
+                      [0, baseY, 0, 1, topY, 1],
+                      [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                  ]
             case 2: // south
                 return right
-                    ? [
-                        [0, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
-                    ]
-                    : [
-                        [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
-                    ]
+                  ? [
+                      [0, baseY, 0, 1, topY, 1],
+                      [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                  ]
+                  : [
+                      [0, baseY, 0, 1, topY, 1],
+                      [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                  ]
             case 3: // west
                 return right
-                    ? [
-                        [0.5, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
-                    ]
-                    : [
-                        [0.5, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
-                    ]
+                  ? [
+                      [0.5, baseY, 0, 1, topY, 1],
+                      [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                  ]
+                  : [
+                      [0.5, baseY, 0, 1, topY, 1],
+                      [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                  ]
         }
     }
 
@@ -414,74 +382,73 @@ function Physics(mcData, world) {
         switch (facing) {
             case 0: // north (front = z[0..0.5], left = west x[0..0.5], right = east x[0.5..1])
                 return left
-                    ? [
-                        // base slab (back half)
-                        [0, baseY, 0.5, 1, topY, 1],
-                        // facing strip (north/front)
-                        [0, stepYMin, 0, 1, stepYMax, 0.5],
-                        // side strip (west/left)
-                        [0, stepYMin, 0, 0.5, stepYMax, 1],
-                    ]
-                    : [
-                        [0, baseY, 0.5, 1, topY, 1],
-                        [0, stepYMin, 0, 1, stepYMax, 0.5],
-                        // side strip (east/right)
-                        [0.5, stepYMin, 0, 1, stepYMax, 1],
-                    ]
+                  ? [
+                      // base slab (back half)
+                      [0, baseY, 0.5, 1, topY, 1],
+                      // facing strip (north/front)
+                      [0, stepYMin, 0, 1, stepYMax, 0.5],
+                      // side strip (west/left)
+                      [0, stepYMin, 0, 0.5, stepYMax, 1],
+                  ]
+                  : [
+                      [0, baseY, 0.5, 1, topY, 1],
+                      [0, stepYMin, 0, 1, stepYMax, 0.5],
+                      // side strip (east/right)
+                      [0.5, stepYMin, 0, 1, stepYMax, 1],
+                  ]
 
             case 1: // east (front = x[0.5..1], left = north z[0..0.5], right = south z[0.5..1])
                 return left
-                    ? [
-                        // base slab (match your straight base for east = full slab)
-                        [0, baseY, 0, 1, topY, 1],
-                        // facing strip (east/front)
-                        [0.5, stepYMin, 0, 1, stepYMax, 1],
-                        // side strip (north/left)
-                        [0, stepYMin, 0, 1, stepYMax, 0.5],
-                    ]
-                    : [
-                        [0, baseY, 0, 1, topY, 1],
-                        [0.5, stepYMin, 0, 1, stepYMax, 1],
-                        // side strip (south/right)
-                        [0, stepYMin, 0.5, 1, stepYMax, 1],
-                    ]
+                  ? [
+                      // base slab (match your straight base for east = full slab)
+                      [0, baseY, 0, 1, topY, 1],
+                      // facing strip (east/front)
+                      [0.5, stepYMin, 0, 1, stepYMax, 1],
+                      // side strip (north/left)
+                      [0, stepYMin, 0, 1, stepYMax, 0.5],
+                  ]
+                  : [
+                      [0, baseY, 0, 1, topY, 1],
+                      [0.5, stepYMin, 0, 1, stepYMax, 1],
+                      // side strip (south/right)
+                      [0, stepYMin, 0.5, 1, stepYMax, 1],
+                  ]
 
             case 2: // south (front = z[0.5..1], left = east x[0.5..1], right = west x[0..0.5])
                 return left
-                    ? [
-                        // base slab (match your straight base for south = full slab)
-                        [0, baseY, 0, 1, topY, 1],
-                        // facing strip (south/front)
-                        [0, stepYMin, 0.5, 1, stepYMax, 1],
-                        // side strip (east/left)
-                        [0.5, stepYMin, 0, 1, stepYMax, 1],
-                    ]
-                    : [
-                        [0, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0.5, 1, stepYMax, 1],
-                        // side strip (west/right)
-                        [0, stepYMin, 0, 0.5, stepYMax, 1],
-                    ]
+                  ? [
+                      // base slab (match your straight base for south = full slab)
+                      [0, baseY, 0, 1, topY, 1],
+                      // facing strip (south/front)
+                      [0, stepYMin, 0.5, 1, stepYMax, 1],
+                      // side strip (east/left)
+                      [0.5, stepYMin, 0, 1, stepYMax, 1],
+                  ]
+                  : [
+                      [0, baseY, 0, 1, topY, 1],
+                      [0, stepYMin, 0.5, 1, stepYMax, 1],
+                      // side strip (west/right)
+                      [0, stepYMin, 0, 0.5, stepYMax, 1],
+                  ]
 
             case 3: // west (front = x[0..0.5], left = south z[0.5..1], right = north z[0..0.5])
                 return left
-                    ? [
-                        // base slab (your straight base for west = x[0.5..1])
-                        [0.5, baseY, 0, 1, topY, 1],
-                        // facing strip (west/front)
-                        [0, stepYMin, 0, 0.5, stepYMax, 1],
-                        // side strip (south/left)
-                        [0, stepYMin, 0.5, 1, stepYMax, 1],
-                    ]
-                    : [
-                        [0.5, baseY, 0, 1, topY, 1],
-                        [0, stepYMin, 0, 0.5, stepYMax, 1],
-                        // side strip (north/right)
-                        [0, stepYMin, 0, 1, stepYMax, 0.5],
-                    ]
+                  ? [
+                      // base slab (your straight base for west = x[0.5..1])
+                      [0.5, baseY, 0, 1, topY, 1],
+                      // facing strip (west/front)
+                      [0, stepYMin, 0, 0.5, stepYMax, 1],
+                      // side strip (south/left)
+                      [0, stepYMin, 0.5, 1, stepYMax, 1],
+                  ]
+                  : [
+                      [0.5, baseY, 0, 1, topY, 1],
+                      [0, stepYMin, 0, 0.5, stepYMax, 1],
+                      // side strip (north/right)
+                      [0, stepYMin, 0, 1, stepYMax, 0.5],
+                  ]
         }
     }
-
 
 
     function getSurroundingBBs(world, queryBB) {
@@ -519,71 +486,54 @@ function Physics(mcData, world) {
     }
 
     // run one tick of player simulation
+    // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1948
     physics.simulatePlayer = (playerState, world) => {
         const {motion, pos} = playerState
         if (playerState.jumpTicks > 0) playerState.jumpTicks--
         if (playerState.yaw) {
-            playerState.yawDegrees = Math.PI - playerState.yaw * RAD_TO_DEG
+            playerState.yawDegrees = new JavaFloat(Math.PI - playerState.yaw * RAD_TO_DEG)
         }
         if (playerState.pitch) {
-            playerState.pitchDegrees = -playerState.pitch * RAD_TO_DEG
+            playerState.pitchDegrees = new JavaFloat(-playerState.pitch * RAD_TO_DEG)
         }
 
-        const waterBB = getPlayerBB(pos).contract(0.001, 0.401, 0.001)
-        const lavaBB = getPlayerBB(pos).contract(0.1, 0.4, 0.1)
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L1111
+        const waterBB = getPlayerBB(pos).contract(
+          new JavaDouble(0.001),
+          new JavaDouble(new JavaFloat(0.400)),
+          new JavaDouble(0.001)
+        )
 
-        //     public boolean handleWaterMovement()
-        //     {
-        //         if (this.worldObj.handleMaterialAcceleration(this.getEntityBoundingBox().expand(0.0D, -0.4000000059604645D, 0.0D).contract(0.001D, 0.001D, 0.001D), Material.water, this))
-        //         {
-        //             if (!this.inWater && !this.firstUpdate)
-        //             {
-        //                 this.resetHeight();
-        //             }
-        //
-        //             this.fallDistance = 0.0F;
-        //             this.inWater = true;
-        //             this.fire = 0;
-        //         }
-        //         else
-        //         {
-        //             this.inWater = false;
-        //         }
-        //
-        //         return this.inWater;
-        //     }
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L1216
+        const lavaBB = getPlayerBB(pos).contract(
+          new JavaDouble(new JavaFloat(0.1)),
+          new JavaDouble(new JavaFloat(0.4)),
+          new JavaDouble(new JavaFloat(0.1))
+        )
 
-
-        /**
-         * Returns if this entity is in water and will end up adding the waters velocity to the entity
-         */
         playerState.isInWater = isInWaterApplyCurrent(world, waterBB, motion)
-        //     public boolean isInLava()
-        //     {
-        //         return this.worldObj.isMaterialInBB(this.getEntityBoundingBox().expand(-0.10000000149011612D, -0.4000000059604645D, -0.10000000149011612D), Material.lava);
-        //     }
         playerState.isInLava = isMaterialInBB(world, lavaBB, lavaIds)
 
         // Reset velocity component if it falls under the threshold
-        if (Math.abs(motion.x) < physics.negligeableVelocity) motion.x = 0
-        if (Math.abs(motion.y) < physics.negligeableVelocity) motion.y = 0
-        if (Math.abs(motion.z) < physics.negligeableVelocity) motion.z = 0
+        if (motion.x.abs() < physics.negligeableVelocity) motion.x = new JavaDouble(0.0)
+        if (motion.y.abs() < physics.negligeableVelocity) motion.y = new JavaDouble(0.0)
+        if (motion.z.abs() < physics.negligeableVelocity) motion.z = new JavaDouble(0.0)
 
         // Handle inputs
         if (playerState.control.jump || playerState.jumpQueued) {
             // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1589
             if (playerState.isInWater || playerState.isInLava) {
-                motion.y += physics.liquidMotionY
+                motion.y = motion.y.add(physics.liquidMotionY)
             } else if (playerState.onGround && playerState.jumpTicks === 0) {
-                motion.y = physics.jumpMotionY
+                motion.y = new JavaDouble(physics.jumpMotionY)
                 if (playerState.jumpBoost > 0) {
-                    motion.y += f32(playerState.jumpBoost) * f32(0.1)
+                    motion.y = motion.y.add(new JavaDouble(new JavaFloat(playerState.jumpBoost).multiply(new JavaFloat(0.1))))
                 }
                 if (playerState.control.sprint) {
                     // notchian yaw is inverted
-                    const notchianYaw = f32(playerState.yawDegrees * DEG_TO_RAD)
-                    motion.x -= sin32(notchianYaw) * f32(0.2)
-                    motion.z += sin32(notchianYaw) * f32(0.2)
+                    const notchianYaw = playerState.yawDegrees.multiply(DEG_TO_RAD)
+                    motion.x = motion.x.subtract(new JavaDouble(sin32(notchianYaw).multiply(new JavaFloat(0.2))))
+                    motion.z = motion.z.add(new JavaDouble(cos32(notchianYaw).multiply(new JavaFloat(0.2))))
                 }
                 playerState.jumpTicks = physics.autojumpCooldown
             }
@@ -592,33 +542,23 @@ function Physics(mcData, world) {
         }
         playerState.jumpQueued = false
 
-        // both these fields should be float32!
-        //         this.moveStrafing *= 0.98F;
-        //         this.moveForward *= 0.98F;
         // movestrafing and moveforward are in range [-1.0, 1.0], already stored as F32
-        let moveStrafing = f32(f32(playerState.control.right - playerState.control.left) * f32(0.98))
-        let moveForward = f32(f32(playerState.control.forward - playerState.control.back) * f32(0.98))
+        let moveStrafing = new JavaFloat(
+          playerState.control.right - playerState.control.left)
+          .multiply(new JavaFloat(0.98))
+        let moveForward = new JavaFloat(
+          playerState.control.forward - playerState.control.back)
+          .multiply(new JavaFloat(0.98))
 
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
         if (playerState.control.sneak) {
-            moveStrafing *= physics.sneakSpeed
-            moveForward *= physics.sneakSpeed
+            moveStrafing = new JavaFloat(new JavaDouble(moveStrafing).multiply(physics.sneakSpeed))
+            moveForward = new JavaFloat(new JavaDouble(moveForward).multiply(physics.sneakSpeed))
         }
 
         moveEntityWithHeading(playerState, world, moveStrafing, moveForward)
 
         return playerState
-    }
-
-    physics.adjustPositionHeight = (pos) => {
-        const playerBB = getPlayerBB(pos)
-        const queryBB = playerBB.clone().extend(0, -1, 0)
-        const surroundingBBs = getSurroundingBBs(world, queryBB)
-
-        let dy = -1
-        for (const blockBB of surroundingBBs) {
-            dy = blockBB.computeOffsetY(playerBB, dy)
-        }
-        pos.y += dy
     }
 
     function moveEntity(playerState, world, dx, dy, dz) {
@@ -627,14 +567,15 @@ function Physics(mcData, world) {
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L612
         if (playerState.isInWeb) {
             playerState.isInWeb = false
-            dx *= 0.25
-            dy *= 0.05
-            dz *= 0.25
-            motion.x = 0
-            motion.y = 0
-            motion.z = 0
+            dx = dx.multiply(new JavaDouble(0.25))
+            dy = dy.multiply(new JavaDouble(new JavaFloat(0.05)))
+            dz = dz.multiply(new JavaDouble(0.25))
+            motion.x = new JavaDouble(0)
+            motion.y = new JavaDouble(0)
+            motion.z = new JavaDouble(0)
         }
 
+        // cloning shouldn't matter, since all operations are non-mutable anyways
         let oldVelX = dx
         let oldVelY = dy
         let oldVelZ = dz
@@ -642,31 +583,33 @@ function Physics(mcData, world) {
         const validSneak = playerState.control.sneak && playerState.onGround
 
         if (validSneak) {
-            const step = 0.05
+            const step = new JavaDouble(0.05)
 
             // In the 3 loops bellow, y offset should be -1, but that doesnt reproduce vanilla behavior.
-            for (; dx !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, 0)).length === 0; oldVelX = dx) {
-                if (dx < step && dx >= -step) dx = 0
-                else if (dx > 0) dx -= step
-                else dx += step
+            for (; dx.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, 0)).length === 0; oldVelX = dx) {
+                if (dx < step && dx >= -step) dx = new JavaDouble(0)
+                else if (dx > 0) dx = dx.subtract(step)
+                else dx = dx.add(step)
             }
 
-            for (; dz !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(0, 0, dz)).length === 0; oldVelZ = dz) {
-                if (dz < step && dz >= -step) dz = 0
-                else if (dz > 0) dz -= step
-                else dz += step
+            for (; dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(0, 0, dz)).length === 0; oldVelZ = dz) {
+                if (dz < step && dz >= -step) dz = new JavaDouble(0)
+                else if (dz > 0) dz = dz.subtract(step)
+                else dz = dz.add(step)
             }
 
-            while (dx !== 0 && dz !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, dz)).length === 0) {
-                if (dx < step && dx >= -step) dx = 0
-                else if (dx > 0) dx -= step
-                else dx += step
+            while (dx.valueOf() !== 0 && dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, dz)).length === 0) {
+                if (dx < step && dx >= -step) dx = new JavaDouble(0)
+                else if (dx > 0) dx = dx.subtract(step)
+                else dx = dx.add(step)
 
-                if (dz < step && dz >= -step) dz = 0
-                else if (dz > 0) dz -= step
-                else dz += step
-
+                // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L679
                 oldVelX = dx
+
+                if (dz < step && dz >= -step) dz = new JavaDouble(0)
+                else if (dz > 0) dz = dz.subtract(step)
+                else dz = dz.add(step)
+
                 oldVelZ = dz
             }
         }
@@ -677,25 +620,25 @@ function Physics(mcData, world) {
         const oldBB = playerBB.clone()
 
         for (const blockBB of surroundingBBs) {
-            dy = blockBB.computeOffsetY(playerBB, dy)
+            dy = new JavaDouble(blockBB.computeOffsetY(playerBB, dy))
         }
 
         playerBB.offset(0, dy, 0)
 
         for (const blockBB of surroundingBBs) {
-            dx = blockBB.computeOffsetX(playerBB, dx)
+            dx = new JavaDouble(blockBB.computeOffsetX(playerBB, dx))
         }
         playerBB.offset(dx, 0, 0)
 
         for (const blockBB of surroundingBBs) {
-            dz = blockBB.computeOffsetZ(playerBB, dz)
+            dz = new JavaDouble(blockBB.computeOffsetZ(playerBB, dz))
         }
 
         playerBB.offset(0, 0, dz)
 
-        const onGroundFlag = (playerState.onGround || (dy !== oldVelY && oldVelY < 0))
+        const onGroundFlag = (playerState.onGround || (dy.valueOf() !== oldVelY.valueOf() && oldVelY < 0))
         // Step on block if height < stepHeight
-        if (physics.stepHeight > 0 && onGroundFlag && (dx !== oldVelX || dz !== oldVelZ)) {
+        if (physics.stepHeight > 0 && onGroundFlag && (dx.valueOf() !== oldVelX.valueOf() || dz.valueOf() !== oldVelZ.valueOf())) {
             const oldVelXCol = dx
             const oldVelYCol = dy
             const oldVelZCol = dz
@@ -721,8 +664,8 @@ function Physics(mcData, world) {
             let dx1 = oldVelX
             let dx2 = oldVelX
             for (const blockBB of surroundingBBs) {
-                dx1 = blockBB.computeOffsetX(BB1, dx1)
-                dx2 = blockBB.computeOffsetX(BB2, dx2)
+                dx1 = new JavaDouble(blockBB.computeOffsetX(BB1, dx1))
+                dx2 = new JavaDouble(blockBB.computeOffsetX(BB2, dx2))
             }
             BB1.offset(dx1, 0, 0)
             BB2.offset(dx2, 0, 0)
@@ -730,14 +673,14 @@ function Physics(mcData, world) {
             let dz1 = oldVelZ
             let dz2 = oldVelZ
             for (const blockBB of surroundingBBs) {
-                dz1 = blockBB.computeOffsetZ(BB1, dz1)
-                dz2 = blockBB.computeOffsetZ(BB2, dz2)
+                dz1 = new JavaDouble(blockBB.computeOffsetZ(BB1, dz1))
+                dz2 = new JavaDouble(blockBB.computeOffsetZ(BB2, dz2))
             }
             BB1.offset(0, 0, dz1)
             BB2.offset(0, 0, dz2)
 
-            const norm1 = dx1 * dx1 + dz1 * dz1
-            const norm2 = dx2 * dx2 + dz2 * dz2
+            const norm1 = dx1.multiply(dx1).add(dz1.multiply(dz1))
+            const norm2 = dx2.multiply(dx2).add(dz2.multiply(dz2))
 
             if (norm1 > norm2) {
                 dx = dx1
@@ -752,11 +695,11 @@ function Physics(mcData, world) {
             }
 
             for (const blockBB of surroundingBBs) {
-                dy = blockBB.computeOffsetY(playerBB, dy)
+                dy = new JavaDouble(blockBB.computeOffsetY(playerBB, dy))
             }
             playerBB.offset(0, dy, 0)
 
-            if (oldVelXCol * oldVelXCol + oldVelZCol * oldVelZCol >= dx * dx + dz * dz) {
+            if (oldVelXCol.multiply(oldVelXCol).add(oldVelZCol.multiply(oldVelZCol)) >= dx.multiply(dx).add(dz.multiply(dz))) {
                 dx = oldVelXCol
                 dy = oldVelYCol
                 dz = oldVelZCol
@@ -767,8 +710,8 @@ function Physics(mcData, world) {
         // Update position (finally!)
         resetPositionToBB(playerBB, pos)
 
-        playerState.isCollidedHorizontally = dx !== oldVelX || dz !== oldVelZ
-        playerState.isCollidedVertically = dy !== oldVelY
+        playerState.isCollidedHorizontally = dx.valueOf() !== oldVelX.valueOf() || dz.valueOf() !== oldVelZ.valueOf()
+        playerState.isCollidedVertically = dy.valueOf() !== oldVelY.valueOf()
         playerState.onGround = playerState.isCollidedVertically && oldVelY < 0
 
         let blockPos = pos.offset(0, -0.2, 0).floored()
@@ -783,13 +726,17 @@ function Physics(mcData, world) {
             }
         }
 
-        if (dx !== oldVelX) motion.x = 0
-        if (dz !== oldVelZ) motion.z = 0
-        if (dy !== oldVelY) {
+        if (dx.valueOf() !== oldVelX.valueOf()) {
+            motion.x = new JavaDouble(0)
+        }
+        if (dz.valueOf() !== oldVelZ.valueOf()) {
+            motion.z = new JavaDouble(0)
+        }
+        if (dy.valueOf() !== oldVelY.valueOf()) {
             if (blockAtFeet && blockAtFeet.type === slimeBlockId && !playerState.control.sneak) {
-                motion.y = -motion.y
+                motion.y = new JavaDouble(-motion.y)
             } else {
-                motion.y = 0
+                motion.y = new JavaDouble(0)
             }
         }
 
@@ -808,10 +755,9 @@ function Physics(mcData, world) {
                     const block = world.getBlock(cursor)
                     if (block) {
                         if (block.type === soulsandId) {
-                            motion.x *= physics.soulsandSpeed
-                            motion.z *= physics.soulsandSpeed
-                        }
-                        if (block.type === webId) {
+                            motion.x.multiply(physics.soulsandSpeed)
+                            motion.z.multiply(physics.soulsandSpeed)
+                        } else if (block.type === webId) {
                             playerState.isInWeb = true
                         }
                     }
@@ -824,20 +770,21 @@ function Physics(mcData, world) {
     function moveFlying(playerState, moveStrafe, moveForward, friction) {
         const {motion} = playerState
 
-        const speedSquared = moveStrafe * moveStrafe + moveForward * moveForward
+        const speedSquared = moveStrafe.multiply(moveStrafe).add(moveForward.multiply(moveForward))
 
         if (speedSquared >= physics.negligeableFlyingSpeed) {
-            let speed = Math.sqrt(speedSquared)
-            if (speed < 1.0) {
-                speed = 1.0
+            let speed = new JavaFloat(Math.sqrt(speedSquared))
+            if (speed < new JavaFloat(1.0)) {
+                speed = new JavaFloat(1.0)
             }
-            speed = friction / speed
-            moveStrafe = moveStrafe * speed;
-            moveForward = moveForward * speed;
-            const sin = sin32(playerState.yawDegrees * DEG_TO_RAD)
-            const cos = cos32(playerState.yawDegrees * DEG_TO_RAD)
-            motion.x = Math.fround(motion.x + -moveStrafe * cos - moveForward * sin)
-            motion.z = Math.fround(motion.z + moveForward * cos - moveStrafe * sin)
+            speed = friction.divide(speed)
+            moveStrafe = moveStrafe.multiply(speed)
+            moveForward = moveForward.multiply(speed)
+
+            const sin = sin32(playerState.yawDegrees.multiply(DEG_TO_RAD))
+            const cos = cos32(playerState.yawDegrees.multiply(DEG_TO_RAD))
+            motion.x = motion.x.add(new JavaDouble(moveStrafe.multiply(cos).subtract(moveForward.multiply(sin))))
+            motion.z = motion.z.add(new JavaDouble(moveForward.multiply(cos).add(moveStrafe.multiply(sin))))
         }
     }
 
@@ -853,8 +800,8 @@ function Physics(mcData, world) {
     function isOffsetPositionInLiquid(world, pos) {
         const pBB = getPlayerBB(pos)
         return !getSurroundingBBs(world, pBB).some(x => pBB.intersects(x))
-            // any materialliquid, which is lava and water
-            && !isMaterialInBB(world, pBB, liquidIds)
+          // any materialliquid, which is lava and water
+          && !isMaterialInBB(world, pBB, liquidIds)
     }
 
     function moveEntityWithHeading(playerState, world, strafe, forward) {
@@ -881,33 +828,41 @@ function Physics(mcData, world) {
                 operation: 2
             })
         }
-        // Calculate what the speed is (0.1 if no modification)
-        const attributeSpeed = attribute.getAttributeValue(playerSpeedAttribute)
+
+        const attributeSpeed = new JavaFloat(attribute.getAttributeValue(playerSpeedAttribute))
 
         if (playerState.isInWater) {
             // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1701
             const lastY = pos.y
             let inertia = physics.waterInertia
             let acceleration = physics.baseLiquidAcceleration
-            let strider = Math.min(playerState.depthStrider, 3)
+            let strider = new JavaFloat(Math.min(playerState.depthStrider, 3))
 
             if (!playerState.onGround) {
-                strider = Math.fround(strider * Math.fround(0.5))
+                strider = strider.multiply(new JavaFloat(0.5))
             }
 
-            if (strider > 0) {
-                inertia = Math.fround(inertia + (Math.fround(0.54600006) - inertia) * strider / 3)
-                acceleration = Math.fround(acceleration + (attributeSpeed - acceleration) * strider / 3)
+            if (strider.valueOf() > 0) {
+                inertia = inertia.add(
+                  (new JavaFloat(0.54600006)
+                    .subtract(inertia))
+                    .multiply(strider)
+                    .divide(new JavaFloat(3.0))
+                )
+                acceleration = acceleration.add(
+                  (attributeSpeed.subtract(acceleration))
+                    .multiply(strider)
+                    .divide(3.0)
+                )
             }
 
             moveFlying(playerState, strafe, forward, acceleration)
             moveEntity(playerState, world, motion.x, motion.y, motion.z)
 
-            motion.x *= inertia
-            motion.y *= physics.waterInertia
-            motion.z *= inertia
-            motion.y -= physics.waterGravity
-
+            motion.x = motion.x.multiply(new JavaDouble(inertia))
+            motion.y = motion.y.multiply(new JavaDouble(physics.waterInertia))
+            motion.z = motion.z.multiply(new JavaDouble(inertia))
+            motion.y = motion.y.subtract(physics.waterGravity)
             if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
                 motion.y = physics.outOfLiquidImpulse // jump out of liquid
             }
@@ -915,10 +870,10 @@ function Physics(mcData, world) {
             const lastY = pos.y
             moveFlying(playerState, strafe, forward, physics.baseLiquidAcceleration)
             moveEntity(playerState, world, motion.x, motion.y, motion.z)
-            motion.x *= physics.lavaInertia
-            motion.y *= physics.lavaInertia
-            motion.z *= physics.lavaInertia
-            motion.y -= physics.lavaGravity
+            motion.x = motion.x.multiply(new JavaDouble(physics.lavaInertia))
+            motion.y = motion.y.multiply(new JavaDouble(physics.lavaInertia))
+            motion.z = motion.z.multiply(new JavaDouble(physics.lavaInertia))
+            motion.y = motion.y.subtract(physics.lavaGravity)
             if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
                 motion.y = physics.outOfLiquidImpulse
             }
@@ -928,16 +883,25 @@ function Physics(mcData, world) {
             if (playerState.onGround) {
                 const blockUnder = world.getBlock(pos.floored().offset(0, -1, 0))
                 const slipperiness = blockUnder?.type && typeof blockSlipperiness[blockUnder.type] === 'number' ?
-                    blockSlipperiness[blockUnder.type] : physics.defaultSlipperiness
-                inertia = Math.fround(slipperiness * Math.fround(0.91))
+                  blockSlipperiness[blockUnder.type] : physics.defaultSlipperiness
+                inertia = new JavaFloat(slipperiness).multiply(new JavaFloat(0.91))
+
             }
 
-            const accelerationScale = physics.magicFrictionCubed / Math.fround(inertia * inertia * inertia)
-            let acceleration = attributeSpeed * accelerationScale
-            if (!playerState.onGround) {
+            const accelerationScale = physics.magicFrictionCubed.divide(inertia.multiply(inertia).multiply(inertia))
+            // todo: change attributespeed to be javafloat
+            let acceleration
+            if (playerState.onGround) {
+                acceleration = attributeSpeed.multiply(accelerationScale)
+            } else {
+                // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L631
                 let jumpMovementFactor = physics.airborneAcceleration
                 if (playerState.control.sprint) {
-                    jumpMovementFactor += physics.airborneAcceleration * 0.3
+                    jumpMovementFactor = new JavaFloat(
+                      new JavaDouble(jumpMovementFactor).add(
+                        new JavaDouble(physics.airborneAcceleration).multiply(new JavaDouble(0.3))
+                      )
+                    )
                 }
                 acceleration = jumpMovementFactor
             }
@@ -945,20 +909,21 @@ function Physics(mcData, world) {
             moveFlying(playerState, strafe, forward, acceleration)
 
             if (isOnLadder(world, pos)) {
-                motion.x = math.clamp(-physics.ladderMaxSpeed, motion.x, physics.ladderMaxSpeed)
-                motion.z = math.clamp(-physics.ladderMaxSpeed, motion.z, physics.ladderMaxSpeed)
+                motion.x = motion.x.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
+                motion.z = motion.x.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
                 if (motion.y < -physics.ladderClimbSpeed) {
-                    motion.y = -physics.ladderClimbSpeed
+                    // clone it
+                    motion.y = new JavaDouble(-physics.ladderClimbSpeed)
                 }
-                if (playerState.control.sneak && motion.y < 0) {
-                    motion.y = 0
+                if (playerState.control.sneak && motion.y < new JavaDouble(0)) {
+                    motion.y = new JavaDouble(0)
                 }
             }
 
             moveEntity(playerState, world, motion.x, motion.y, motion.z)
 
-            if (isOnLadder(world, pos) && (playerState.isCollidedHorizontally ||
-                (supportFeature('climbUsingJump') && playerState.control.jump))) {
+            if (isOnLadder(world, new Vec3(pos.x, pos.y, pos.z)) && (playerState.isCollidedHorizontally ||
+              (supportFeature('climbUsingJump') && playerState.control.jump))) {
                 motion.y = physics.ladderClimbSpeed // climb ladder
             }
 
@@ -966,17 +931,17 @@ function Physics(mcData, world) {
             // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1664
             if (!world.getBlock(new Vec3(pos.x, 0, pos.z).floored())) {
                 if (pos.y > 0) {
-                    motion.y = -0.1
+                    motion.y = new JavaDouble(-0.1)
                 } else {
-                    motion.y = 0
+                    motion.y = new JavaDouble(0)
                 }
             } else {
-                motion.y -= physics.gravity
+                motion.y = motion.y.subtract(physics.gravity)
             }
 
-            motion.y *= physics.airdrag
-            motion.x = motion.x * inertia
-            motion.z = motion.z * inertia
+            motion.y = motion.y.multiply(new JavaDouble(physics.airdrag))
+            motion.x = motion.x.multiply(new JavaDouble(inertia))
+            motion.z = motion.z.multiply(new JavaDouble(inertia))
         }
     }
 
@@ -1007,7 +972,7 @@ function Physics(mcData, world) {
 
     function getFlow(world, block) {
         const curlevel = getRenderedDepth(block)
-        const flow = new Vec3(0, 0, 0)
+        const flow = new Vec3Double(0, 0, 0)
         for (const [dx, dz] of [[0, 1], [-1, 0], [0, -1], [1, 0]]) {
             const adjBlock = world.getBlock(block.position.offset(dx, 0, dz))
             const adjLevel = getRenderedDepth(adjBlock)
@@ -1015,15 +980,15 @@ function Physics(mcData, world) {
                 if (adjBlock && adjBlock.boundingBox !== 'empty') {
                     const adjLevel = getRenderedDepth(world.getBlock(block.position.offset(dx, -1, dz)))
                     if (adjLevel >= 0) {
-                        const f = adjLevel - (curlevel - 8)
-                        flow.x += dx * f
-                        flow.z += dz * f
+                        const f = new JavaDouble(adjLevel - (curlevel - 8))
+                        flow.x = flow.x.add(new JavaDouble(dx)).multiply(f)
+                        flow.z = flow.z.add(new JavaDouble(dz)).multiply(f)
                     }
                 }
             } else {
-                const f = adjLevel - curlevel
-                flow.x += dx * f
-                flow.z += dz * f
+                const f = new JavaDouble(adjLevel - curlevel)
+                flow.x = flow.x.add(new JavaDouble(dx)).multiply(f)
+                flow.z = flow.z.add(new JavaDouble(dz)).multiply(f)
             }
         }
 
@@ -1057,8 +1022,10 @@ function Physics(mcData, world) {
         return waterBlocks
     }
 
-    function isInWaterApplyCurrent(world, bb, vel) {
-        const acceleration = new Vec3(0, 0, 0)
+    // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/world/World.java#L2077
+    function isInWaterApplyCurrent(world, bb, motion) {
+        // applying the flow is still kinda broken, but wtv
+        const acceleration = new Vec3Double(0, 0, 0)
         const waterBlocks = getWaterInBB(world, bb)
         const isInWater = waterBlocks.length > 0
         for (const block of waterBlocks) {
@@ -1066,11 +1033,11 @@ function Physics(mcData, world) {
             acceleration.add(flow)
         }
 
-        const len = acceleration.norm()
-        if (len > 0) {
-            vel.x += acceleration.x / len * 0.014
-            vel.y += acceleration.y / len * 0.014
-            vel.z += acceleration.z / len * 0.014
+        const len = acceleration.length()
+        if (len > 0.0) {
+            motion.x = motion.x.add(acceleration.x.divide(len).multiply(new JavaDouble(0.014)))
+            motion.y = motion.y.add(acceleration.y.divide(len).multiply(new JavaDouble(0.014)))
+            motion.z = motion.z.add(acceleration.z.divide(len).multiply(new JavaDouble(0.014)))
         }
         return isInWater
     }
@@ -1112,9 +1079,9 @@ class PlayerState {
     constructor(bot, control) {
         const mcData = require('minecraft-data')(bot.version)
 
-        // Input / Outputs
-        this.pos = bot.entity.position.clone()
-        this.motion = bot.entity.velocity.clone()
+        this.pos = new Vec3Double(bot.entity.position.x, bot.entity.position.y, bot.entity.position.z)
+        this.motion = new Vec3Double(bot.entity.velocity.x, bot.entity.velocity.y, bot.entity.velocity.z)
+
         this.onGround = bot.entity.onGround
         this.isInWater = bot.entity.isInWater
         this.isInLava = bot.entity.isInLava
@@ -1128,18 +1095,15 @@ class PlayerState {
         // Input only (not modified)
         this.attributes = bot.entity.attributes
         // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-        this.yawDegrees = Math.fround(bot.entity.yawDegrees)
-        this.pitchDegrees = Math.fround(bot.entity.pitchDegrees)
+        this.yawDegrees = new JavaFloat(bot.entity.yawDegrees)
+        this.pitchDegrees = new JavaFloat(bot.entity.pitchDegrees)
         this.control = control
 
         // effects
         const effects = bot.entity.effects
-
-        this.jumpBoost = getEffectLevel(mcData, 'JumpBoost', effects)
-
+        this.jumpBoost = new JavaInt(getEffectLevel(mcData, 'JumpBoost', effects))
         // armour enchantments
         const boots = bot.inventory.slots[8]
-
         if (boots && boots.nbt) {
             const simplifiedNbt = nbt.simplify(boots.nbt)
             const enchantments = simplifiedNbt.Enchantments ?? simplifiedNbt.ench ?? []
@@ -1152,8 +1116,16 @@ class PlayerState {
     }
 
     apply(bot) {
-        bot.entity.position = this.pos
-        bot.entity.velocity = this.motion
+        bot.entity.position = new Vec3(
+          this.pos.x,
+          this.pos.y,
+          this.pos.z
+        )
+        bot.entity.velocity = new Vec3(
+          this.motion.x,
+          this.motion.y,
+          this.motion.z
+        )
         bot.entity.onGround = this.onGround
         bot.entity.isInWater = this.isInWater
         bot.entity.isInLava = this.isInLava
