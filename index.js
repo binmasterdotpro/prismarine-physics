@@ -491,7 +491,7 @@ function Physics(mcData, world) {
         const {motion, pos} = playerState
         if (playerState.jumpTicks > 0) playerState.jumpTicks--
         if (playerState.yaw) {
-            playerState.yawDegrees = new JavaFloat(Math.PI - playerState.yaw * RAD_TO_DEG)
+            playerState.yawDegrees = new JavaFloat((Math.PI - playerState.yaw) * RAD_TO_DEG)
         }
         if (playerState.pitch) {
             playerState.pitchDegrees = new JavaFloat(-playerState.pitch * RAD_TO_DEG)
