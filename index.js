@@ -7,9 +7,9 @@ const {JavaFloat, JavaDouble, sin32, cos32, JavaInt, Vec3Double} = require("./li
 
 function makeSupportFeature(mcData) {
     return feature => features.some(({
-        name,
-        versions
-    }) => name === feature && versions.includes(mcData.version.majorVersion))
+                                         name,
+                                         versions
+                                     }) => name === feature && versions.includes(mcData.version.majorVersion))
 }
 
 // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1578C42-L1578C53
@@ -46,11 +46,12 @@ function Physics(mcData, world) {
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1559
         jumpMotionY: new JavaFloat(0.42),
         ladderClimbSpeed: new JavaDouble(0.15),
-        // todo: DETERMINE THESE TYPES!
-        playerHalfWidth: new JavaDouble(0.3),
-        playerHeight: new JavaDouble(1.8),
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L375
+        playerHalfWidth: new JavaFloat(0.3),
+        playerHeight: new JavaFloat(1.8),
         waterInertia: new JavaFloat(0.8),
-        lavaInertia: new JavaFloat(0.5),
+        // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1689
+        lavaInertia: new JavaDouble(0.5),
         baseLiquidAcceleration: new JavaFloat(0.02),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/Block.java#L291
         defaultSlipperiness: new JavaFloat(0.6),
@@ -335,44 +336,44 @@ function Physics(mcData, world) {
         switch (facing) {
             case 0: // north
                 return right
-                  ? [
-                      [0, baseY, 0.5, 1, topY, 1],
-                      [0.5, stepYMin, 0, 1, stepYMax, 0.5]
-                  ]
-                  : [
-                      [0, baseY, 0.5, 1, topY, 1],
-                      [0, stepYMin, 0, 0.5, stepYMax, 0.5]
-                  ]
+                    ? [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                    ]
+                    : [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                    ]
             case 1: // east
                 return right
-                  ? [
-                      [0, baseY, 0, 1, topY, 1],
-                      [0.5, stepYMin, 0.5, 1, stepYMax, 1]
-                  ]
-                  : [
-                      [0, baseY, 0, 1, topY, 1],
-                      [0.5, stepYMin, 0, 1, stepYMax, 0.5]
-                  ]
+                    ? [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 0.5]
+                    ]
             case 2: // south
                 return right
-                  ? [
-                      [0, baseY, 0, 1, topY, 1],
-                      [0, stepYMin, 0.5, 0.5, stepYMax, 1]
-                  ]
-                  : [
-                      [0, baseY, 0, 1, topY, 1],
-                      [0.5, stepYMin, 0.5, 1, stepYMax, 1]
-                  ]
+                    ? [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0.5, 1, stepYMax, 1]
+                    ]
             case 3: // west
                 return right
-                  ? [
-                      [0.5, baseY, 0, 1, topY, 1],
-                      [0, stepYMin, 0, 0.5, stepYMax, 0.5]
-                  ]
-                  : [
-                      [0.5, baseY, 0, 1, topY, 1],
-                      [0, stepYMin, 0.5, 0.5, stepYMax, 1]
-                  ]
+                    ? [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 0.5]
+                    ]
+                    : [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 0.5, stepYMax, 1]
+                    ]
         }
     }
 
@@ -382,71 +383,71 @@ function Physics(mcData, world) {
         switch (facing) {
             case 0: // north (front = z[0..0.5], left = west x[0..0.5], right = east x[0.5..1])
                 return left
-                  ? [
-                      // base slab (back half)
-                      [0, baseY, 0.5, 1, topY, 1],
-                      // facing strip (north/front)
-                      [0, stepYMin, 0, 1, stepYMax, 0.5],
-                      // side strip (west/left)
-                      [0, stepYMin, 0, 0.5, stepYMax, 1],
-                  ]
-                  : [
-                      [0, baseY, 0.5, 1, topY, 1],
-                      [0, stepYMin, 0, 1, stepYMax, 0.5],
-                      // side strip (east/right)
-                      [0.5, stepYMin, 0, 1, stepYMax, 1],
-                  ]
+                    ? [
+                        // base slab (back half)
+                        [0, baseY, 0.5, 1, topY, 1],
+                        // facing strip (north/front)
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
+                        // side strip (west/left)
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
+                    ]
+                    : [
+                        [0, baseY, 0.5, 1, topY, 1],
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
+                        // side strip (east/right)
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
+                    ]
 
             case 1: // east (front = x[0.5..1], left = north z[0..0.5], right = south z[0.5..1])
                 return left
-                  ? [
-                      // base slab (match your straight base for east = full slab)
-                      [0, baseY, 0, 1, topY, 1],
-                      // facing strip (east/front)
-                      [0.5, stepYMin, 0, 1, stepYMax, 1],
-                      // side strip (north/left)
-                      [0, stepYMin, 0, 1, stepYMax, 0.5],
-                  ]
-                  : [
-                      [0, baseY, 0, 1, topY, 1],
-                      [0.5, stepYMin, 0, 1, stepYMax, 1],
-                      // side strip (south/right)
-                      [0, stepYMin, 0.5, 1, stepYMax, 1],
-                  ]
+                    ? [
+                        // base slab (match your straight base for east = full slab)
+                        [0, baseY, 0, 1, topY, 1],
+                        // facing strip (east/front)
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
+                        // side strip (north/left)
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
+                        // side strip (south/right)
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
+                    ]
 
             case 2: // south (front = z[0.5..1], left = east x[0.5..1], right = west x[0..0.5])
                 return left
-                  ? [
-                      // base slab (match your straight base for south = full slab)
-                      [0, baseY, 0, 1, topY, 1],
-                      // facing strip (south/front)
-                      [0, stepYMin, 0.5, 1, stepYMax, 1],
-                      // side strip (east/left)
-                      [0.5, stepYMin, 0, 1, stepYMax, 1],
-                  ]
-                  : [
-                      [0, baseY, 0, 1, topY, 1],
-                      [0, stepYMin, 0.5, 1, stepYMax, 1],
-                      // side strip (west/right)
-                      [0, stepYMin, 0, 0.5, stepYMax, 1],
-                  ]
+                    ? [
+                        // base slab (match your straight base for south = full slab)
+                        [0, baseY, 0, 1, topY, 1],
+                        // facing strip (south/front)
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
+                        // side strip (east/left)
+                        [0.5, stepYMin, 0, 1, stepYMax, 1],
+                    ]
+                    : [
+                        [0, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
+                        // side strip (west/right)
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
+                    ]
 
             case 3: // west (front = x[0..0.5], left = south z[0.5..1], right = north z[0..0.5])
                 return left
-                  ? [
-                      // base slab (your straight base for west = x[0.5..1])
-                      [0.5, baseY, 0, 1, topY, 1],
-                      // facing strip (west/front)
-                      [0, stepYMin, 0, 0.5, stepYMax, 1],
-                      // side strip (south/left)
-                      [0, stepYMin, 0.5, 1, stepYMax, 1],
-                  ]
-                  : [
-                      [0.5, baseY, 0, 1, topY, 1],
-                      [0, stepYMin, 0, 0.5, stepYMax, 1],
-                      // side strip (north/right)
-                      [0, stepYMin, 0, 1, stepYMax, 0.5],
-                  ]
+                    ? [
+                        // base slab (your straight base for west = x[0.5..1])
+                        [0.5, baseY, 0, 1, topY, 1],
+                        // facing strip (west/front)
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
+                        // side strip (south/left)
+                        [0, stepYMin, 0.5, 1, stepYMax, 1],
+                    ]
+                    : [
+                        [0.5, baseY, 0, 1, topY, 1],
+                        [0, stepYMin, 0, 0.5, stepYMax, 1],
+                        // side strip (north/right)
+                        [0, stepYMin, 0, 1, stepYMax, 0.5],
+                    ]
         }
     }
 
@@ -499,16 +500,16 @@ function Physics(mcData, world) {
 
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L1111
         const waterBB = getPlayerBB(pos).contract(
-          new JavaDouble(0.001),
-          new JavaDouble(new JavaFloat(0.400)),
-          new JavaDouble(0.001)
+            new JavaDouble(0.001),
+            new JavaDouble(new JavaFloat(0.400)),
+            new JavaDouble(0.001)
         )
 
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L1216
         const lavaBB = getPlayerBB(pos).contract(
-          new JavaDouble(new JavaFloat(0.1)),
-          new JavaDouble(new JavaFloat(0.4)),
-          new JavaDouble(new JavaFloat(0.1))
+            new JavaDouble(new JavaFloat(0.1)),
+            new JavaDouble(new JavaFloat(0.4)),
+            new JavaDouble(new JavaFloat(0.1))
         )
 
         playerState.isInWater = isInWaterApplyCurrent(world, waterBB, motion)
@@ -544,11 +545,11 @@ function Physics(mcData, world) {
 
         // movestrafing and moveforward are in range [-1.0, 1.0], already stored as F32
         let moveStrafing = new JavaFloat(
-          playerState.control.right - playerState.control.left)
-          .multiply(new JavaFloat(0.98))
+            playerState.control.right - playerState.control.left)
+            .multiply(new JavaFloat(0.98))
         let moveForward = new JavaFloat(
-          playerState.control.forward - playerState.control.back)
-          .multiply(new JavaFloat(0.98))
+            playerState.control.forward - playerState.control.back)
+            .multiply(new JavaFloat(0.98))
 
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
         if (playerState.control.sneak) {
@@ -800,8 +801,8 @@ function Physics(mcData, world) {
     function isOffsetPositionInLiquid(world, pos) {
         const pBB = getPlayerBB(pos)
         return !getSurroundingBBs(world, pBB).some(x => pBB.intersects(x))
-          // any materialliquid, which is lava and water
-          && !isMaterialInBB(world, pBB, liquidIds)
+            // any materialliquid, which is lava and water
+            && !isMaterialInBB(world, pBB, liquidIds)
     }
 
     function moveEntityWithHeading(playerState, world, strafe, forward) {
@@ -819,7 +820,7 @@ function Physics(mcData, world) {
         // setSprinting in LivingEntity.java
         playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, physics.sprintingUUID) // always delete sprinting (if it exists)
 
-        const isSprintingApplicable = forward > 0 && !playerState.control.sneak
+        const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
 
         if (playerState.control.sprint && isSprintingApplicable && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
             playerSpeedAttribute = attribute.addAttributeModifier(playerSpeedAttribute, {
@@ -844,15 +845,15 @@ function Physics(mcData, world) {
 
             if (strider.valueOf() > 0) {
                 inertia = inertia.add(
-                  (new JavaFloat(0.54600006)
-                    .subtract(inertia))
-                    .multiply(strider)
-                    .divide(new JavaFloat(3.0))
+                    (new JavaFloat(0.54600006)
+                        .subtract(inertia))
+                        .multiply(strider)
+                        .divide(new JavaFloat(3.0))
                 )
                 acceleration = acceleration.add(
-                  (attributeSpeed.subtract(acceleration))
-                    .multiply(strider)
-                    .divide(3.0)
+                    (attributeSpeed.subtract(acceleration))
+                        .multiply(strider)
+                        .divide(3.0)
                 )
             }
 
@@ -863,18 +864,18 @@ function Physics(mcData, world) {
             motion.y = motion.y.multiply(new JavaDouble(physics.waterInertia))
             motion.z = motion.z.multiply(new JavaDouble(inertia))
             motion.y = motion.y.subtract(physics.waterGravity)
-            if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
+            if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y.add(new JavaDouble(0.6)).subtract(pos.y).add(lastY), motion.z))) {
                 motion.y = new JavaDouble(physics.outOfLiquidImpulse) // jump out of liquid
             }
         } else if (playerState.isInLava) {
             const lastY = pos.y
             moveFlying(playerState, strafe, forward, physics.baseLiquidAcceleration)
             moveEntity(playerState, world, motion.x, motion.y, motion.z)
-            motion.x = motion.x.multiply(new JavaDouble(physics.lavaInertia))
-            motion.y = motion.y.multiply(new JavaDouble(physics.lavaInertia))
-            motion.z = motion.z.multiply(new JavaDouble(physics.lavaInertia))
+            motion.x = motion.x.multiply(physics.lavaInertia)
+            motion.y = motion.y.multiply(physics.lavaInertia)
+            motion.z = motion.z.multiply(physics.lavaInertia)
             motion.y = motion.y.subtract(physics.lavaGravity)
-            if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
+            if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y.add(new JavaDouble(0.6)).subtract(pos.y).add(lastY), motion.z))) {
                 motion.y = new JavaDouble(physics.outOfLiquidImpulse)
             }
         } else {
@@ -883,7 +884,7 @@ function Physics(mcData, world) {
             if (playerState.onGround) {
                 const blockUnder = world.getBlock(pos.floored().offset(0, -1, 0))
                 const slipperiness = blockUnder?.type && typeof blockSlipperiness[blockUnder.type] === 'number' ?
-                  blockSlipperiness[blockUnder.type] : physics.defaultSlipperiness
+                    blockSlipperiness[blockUnder.type] : physics.defaultSlipperiness
                 inertia = new JavaFloat(slipperiness).multiply(new JavaFloat(0.91))
 
             }
@@ -898,9 +899,9 @@ function Physics(mcData, world) {
                 let jumpMovementFactor = physics.airborneAcceleration
                 if (playerState.control.sprint) {
                     jumpMovementFactor = new JavaFloat(
-                      new JavaDouble(jumpMovementFactor).add(
-                        new JavaDouble(physics.airborneAcceleration).multiply(new JavaDouble(0.3))
-                      )
+                        new JavaDouble(jumpMovementFactor).add(
+                            new JavaDouble(physics.airborneAcceleration).multiply(new JavaDouble(0.3))
+                        )
                     )
                 }
                 acceleration = jumpMovementFactor
@@ -923,7 +924,7 @@ function Physics(mcData, world) {
             moveEntity(playerState, world, motion.x, motion.y, motion.z)
 
             if (isOnLadder(world, new Vec3(pos.x, pos.y, pos.z)) && (playerState.isCollidedHorizontally ||
-              (supportFeature('climbUsingJump') && playerState.control.jump))) {
+                (supportFeature('climbUsingJump') && playerState.control.jump))) {
                 motion.y = physics.ladderClimbSpeed // climb ladder
             }
 
@@ -1117,14 +1118,14 @@ class PlayerState {
 
     apply(bot) {
         bot.entity.position = new Vec3(
-          this.pos.x,
-          this.pos.y,
-          this.pos.z
+            this.pos.x,
+            this.pos.y,
+            this.pos.z
         )
         bot.entity.velocity = new Vec3(
-          this.motion.x,
-          this.motion.y,
-          this.motion.z
+            this.motion.x,
+            this.motion.y,
+            this.motion.z
         )
         bot.entity.onGround = this.onGround
         bot.entity.isInWater = this.isInWater
