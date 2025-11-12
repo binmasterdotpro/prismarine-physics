@@ -972,33 +972,54 @@ function Physics(mcData, world) {
     }
 
     function getFlow(world, block) {
-        const curlevel = getRenderedDepth(block)
-        const flow = new Vec3Double(0, 0, 0)
-        for (const [dx, dz] of [[0, 1], [-1, 0], [0, -1], [1, 0]]) {
-            const adjBlock = world.getBlock(block.position.offset(dx, 0, dz))
-            const adjLevel = getRenderedDepth(adjBlock)
+        const pos = block.position
+        const curLevel = getRenderedDepth(block)
+        const flow = new Vec3Double(0.0, 0.0, 0.0)
+
+        const directions = [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1]
+        ]
+
+        for (const [dx, dz] of directions) {
+            const adjPos = pos.offset(dx, 0, dz)
+            const adjBlock = world.getBlock(adjPos)
+            let adjLevel = getRenderedDepth(adjBlock)
+
             if (adjLevel < 0) {
-                if (adjBlock && adjBlock.boundingBox !== 'empty') {
-                    const adjLevel = getRenderedDepth(world.getBlock(block.position.offset(dx, -1, dz)))
+                // block is "solid" if it blocks movement (non-empty bbox)
+                const adjBlockStateSolid = adjBlock && adjBlock.boundingBox !== 'empty'
+                if (!adjBlockStateSolid) {
+                    const belowBlock = world.getBlock(adjPos.offset(0, -1, 0))
+                    adjLevel = getRenderedDepth(belowBlock)
                     if (adjLevel >= 0) {
-                        const f = new JavaDouble(adjLevel - (curlevel - 8))
-                        flow.x = flow.x.add(new JavaDouble(dx)).multiply(f)
-                        flow.z = flow.z.add(new JavaDouble(dz)).multiply(f)
+                        const k = new JavaDouble(adjLevel - (curLevel - 8))
+                        flow.x = flow.x.add(new JavaDouble(dx).multiply(k))
+                        flow.z = flow.z.add(new JavaDouble(dz).multiply(k))
                     }
                 }
             } else {
-                const f = new JavaDouble(adjLevel - curlevel)
-                flow.x = flow.x.add(new JavaDouble(dx)).multiply(f)
-                flow.z = flow.z.add(new JavaDouble(dz)).multiply(f)
+                const l = new JavaDouble(adjLevel - curLevel)
+                flow.x = flow.x.add(new JavaDouble(dx).multiply(l))
+                flow.z = flow.z.add(new JavaDouble(dz).multiply(l))
             }
         }
 
+        // Falling water handling
         if (block.metadata >= 8) {
-            for (const [dx, dz] of [[0, 1], [-1, 0], [0, -1], [1, 0]]) {
-                const adjBlock = world.getBlock(block.position.offset(dx, 0, dz))
-                const adjUpBlock = world.getBlock(block.position.offset(dx, 1, dz))
-                if ((adjBlock && adjBlock.boundingBox !== 'empty') || (adjUpBlock && adjUpBlock.boundingBox !== 'empty')) {
-                    flow.normalize().translate(0, -6, 0)
+            for (const [dx, dz] of directions) {
+                const side = pos.offset(dx, 0, dz)
+                const sideUp = pos.offset(dx, 1, dz)
+                const sideBlock = world.getBlock(side)
+                const sideUpBlock = world.getBlock(sideUp)
+                const solidSide = (sideBlock && sideBlock.boundingBox !== 'empty')
+                const solidUp = (sideUpBlock && sideUpBlock.boundingBox !== 'empty')
+                if (solidSide || solidUp) {
+                    flow.normalize()
+                    flow.y = flow.y.add(new JavaDouble(-6.0))
+                    break // only apply once!
                 }
             }
         }
@@ -1006,41 +1027,55 @@ function Physics(mcData, world) {
         return flow.normalize()
     }
 
-    function getWaterInBB(world, bb) {
-        const waterBlocks = []
+
+    // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/world/World.java#L2077
+    function isInWaterApplyCurrent(world, bb, motion) {
+        const minX = Math.floor(bb.minX)
+        const maxX = Math.floor(bb.maxX + 1)
+        const minY = Math.floor(bb.minY)
+        const maxY = Math.floor(bb.maxY + 1)
+        const minZ = Math.floor(bb.minZ)
+        const maxZ = Math.floor(bb.maxZ + 1)
+
+        // Always assume area loaded
+        let flag = false
+        let vec3 = new Vec3Double(0.0, 0.0, 0.0)
         const cursor = new Vec3(0, 0, 0)
-        for (cursor.y = Math.floor(bb.minY); cursor.y <= Math.floor(bb.maxY); cursor.y++) {
-            for (cursor.z = Math.floor(bb.minZ); cursor.z <= Math.floor(bb.maxZ); cursor.z++) {
-                for (cursor.x = Math.floor(bb.minX); cursor.x <= Math.floor(bb.maxX); cursor.x++) {
+
+        for (cursor.x = minX; cursor.x < maxX; cursor.x++) {
+            for (cursor.y = minY; cursor.y < maxY; cursor.y++) {
+                for (cursor.z = minZ; cursor.z < maxZ; cursor.z++) {
                     const block = world.getBlock(cursor)
-                    if (block && (waterIds.includes(block.type))) {
-                        const waterLevel = cursor.y + 1 - getLiquidHeightPcent(block)
-                        if (Math.ceil(bb.maxY) >= waterLevel) waterBlocks.push(block)
+                    if (!block) continue
+                    if (waterIds.includes(block.type)) {
+                        const liquidHeight = new JavaDouble(cursor.y + 1)
+                            .subtract(new JavaDouble(getLiquidHeightPcent(block)))
+
+                        if (new JavaDouble(bb.maxY) >= liquidHeight) {
+                            flag = true
+                            // equivalent to Block.modifyAcceleration(world, pos, entity, vec3)
+                            const flow = getFlow(world, block)
+                            vec3 = new Vec3Double(
+                                vec3.x.add(flow.x),
+                                vec3.y.add(flow.y),
+                                vec3.z.add(flow.z)
+                            )
+                        }
                     }
                 }
             }
         }
-        return waterBlocks
-    }
 
-    // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/world/World.java#L2077
-    function isInWaterApplyCurrent(world, bb, motion) {
-        // applying the flow is still kinda broken, but wtv
-        const acceleration = new Vec3Double(0, 0, 0)
-        const waterBlocks = getWaterInBB(world, bb)
-        const isInWater = waterBlocks.length > 0
-        for (const block of waterBlocks) {
-            const flow = getFlow(world, block)
-            acceleration.add(flow)
+        // todo: technically, should check if entity.isPushedByWater (!this.capabilities.isFlying), but since flying is not implemented, ignore that part
+        if (vec3.length() > new JavaDouble(0.0)) {
+            const normalized = vec3.normalize()
+            const d1 = new JavaDouble(0.014)
+            motion.x = motion.x.add(normalized.x.multiply(d1))
+            motion.y = motion.y.add(normalized.y.multiply(d1))
+            motion.z = motion.z.add(normalized.z.multiply(d1))
         }
 
-        const len = acceleration.length()
-        if (len > 0.0) {
-            motion.x = motion.x.add(acceleration.x.divide(len).multiply(new JavaDouble(0.014)))
-            motion.y = motion.y.add(acceleration.y.divide(len).multiply(new JavaDouble(0.014)))
-            motion.z = motion.z.add(acceleration.z.divide(len).multiply(new JavaDouble(0.014)))
-        }
-        return isInWater
+        return flag
     }
 
     return physics
