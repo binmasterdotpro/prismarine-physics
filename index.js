@@ -139,6 +139,11 @@ function Physics(mcData, world) {
         'purpur_stairs',
     ])
 
+    const glassPaneIds = new Set([
+        'glass_pane',
+        'stained_glass_pane',
+    ])
+
     const CARDINAL_NOMENCLATURE = [
         'north',
         'east',
@@ -451,6 +456,56 @@ function Physics(mcData, world) {
         }
     }
 
+    const glassPaneCanConnect = new Set(["glass", "stained_glass"])
+
+    function computePaneBB(world, origin) {
+        const baseBoxes = []
+
+        // Helper: determines if a glass pane connects to the given neighbor
+        function canConnect(block) {
+            if (!block) return false
+            if (glassPaneIds.has(block.name) || glassPaneCanConnect.has(block.name)) return true
+            if (block.boundingBox && block.boundingBox !== 'empty') return block.boundingBox !== 'empty'
+            return false
+        }
+
+        // Get neighboring blocks
+        const neighbors = CARDINAL.map(dir => world.getBlock(origin.plus(dir)))
+        const [north, east, south, west] = neighbors
+
+        const canConnectNorth = canConnect(north)
+        const canConnectEast = canConnect(east)
+        const canConnectSouth = canConnect(south)
+        const canConnectWest = canConnect(west)
+        const anyConnection = canConnectNorth || canConnectEast || canConnectSouth || canConnectWest
+
+        // Handle east/west axis
+        if ((!canConnectWest || !canConnectEast) && anyConnection) {
+            if (canConnectWest) {
+                baseBoxes.push([0.0, 0.0, 0.4375, 0.5, 1.0, 0.5625])
+            } else if (canConnectEast) {
+                baseBoxes.push([0.5, 0.0, 0.4375, 1.0, 1.0, 0.5625])
+            }
+        } else {
+            // Either both connected or neither connected — add full NS plane
+            baseBoxes.push([0.0, 0.0, 0.4375, 1.0, 1.0, 0.5625])
+        }
+
+        // Handle north/south axis
+        if ((!canConnectNorth || !canConnectSouth) && anyConnection) {
+            if (canConnectNorth) {
+                baseBoxes.push([0.4375, 0.0, 0.0, 0.5625, 1.0, 0.5])
+            } else if (canConnectSouth) {
+                baseBoxes.push([0.4375, 0.0, 0.5, 0.5625, 1.0, 1.0])
+            }
+        } else {
+            // Either both connected or neither connected — add full EW plane
+            baseBoxes.push([0.4375, 0.0, 0.0, 0.5625, 1.0, 1.0])
+        }
+
+        return baseBoxes
+    }
+
 
     function getSurroundingBBs(world, queryBB) {
         const surroundingBBs = []
@@ -468,6 +523,8 @@ function Physics(mcData, world) {
                             shapes = computeStairBB(world, blockPos, block)
                         } else if (fenceIds.has(block.name)) {
                             shapes = computeFenceBB(world, blockPos)
+                        } else if (glassPaneIds.has(block.name)) {
+                            shapes = computePaneBB(world, blockPos)
                         } else if (block.name === 'snow_layer' && block._properties.layers === 8) {
                             const blockAbove = world.getBlock(blockPos.offset(0, 1, 0))
                             if (blockAbove && blockAbove.name === 'snow_layer') {
