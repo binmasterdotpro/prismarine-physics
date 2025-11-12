@@ -47,7 +47,7 @@ function Physics(mcData, world) {
         jumpMotionY: new JavaFloat(0.42),
         ladderClimbSpeed: new JavaDouble(0.15),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L375
-        playerHalfWidth: new JavaFloat(0.3),
+        playerHalfWidth: new JavaFloat(0.6).divide(new JavaFloat(2)),
         playerHeight: new JavaFloat(1.8),
         waterInertia: new JavaFloat(0.8),
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1689
@@ -643,6 +643,7 @@ function Physics(mcData, world) {
         if (validSneak) {
             const step = new JavaDouble(0.05)
 
+            // todo: lets verify this claim
             // In the 3 loops bellow, y offset should be -1, but that doesnt reproduce vanilla behavior.
             for (; dx.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, 0)).length === 0; oldVelX = dx) {
                 if (dx < step && dx >= -step) dx = new JavaDouble(0)
@@ -656,7 +657,7 @@ function Physics(mcData, world) {
                 else dz = dz.add(step)
             }
 
-            while (dx.valueOf() !== 0 && dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, dz)).length === 0) {
+            for (; dx.valueOf() !== 0 && dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 1, dz)).length === 0; oldVelZ = dz) {
                 if (dx < step && dx >= -step) dx = new JavaDouble(0)
                 else if (dx > 0) dx = dx.subtract(step)
                 else dx = dx.add(step)
@@ -667,8 +668,6 @@ function Physics(mcData, world) {
                 if (dz < step && dz >= -step) dz = new JavaDouble(0)
                 else if (dz > 0) dz = dz.subtract(step)
                 else dz = dz.add(step)
-
-                oldVelZ = dz
             }
         }
 
@@ -694,64 +693,72 @@ function Physics(mcData, world) {
 
         playerBB.offset(0, 0, dz)
 
-        const onGroundFlag = (playerState.onGround || (dy.valueOf() !== oldVelY.valueOf() && oldVelY < 0))
+        const onGroundFlag = (playerState.onGround || (oldVelY.valueOf() !== dy.valueOf() && oldVelY < 0))
+
         // Step on block if height < stepHeight
-        if (physics.stepHeight > 0 && onGroundFlag && (dx.valueOf() !== oldVelX.valueOf() || dz.valueOf() !== oldVelZ.valueOf())) {
+        if (physics.stepHeight > 0 && onGroundFlag && (oldVelX.valueOf() !== dx.valueOf() || oldVelZ.valueOf() !== dz.valueOf())) {
             const oldVelXCol = dx
             const oldVelYCol = dy
             const oldVelZCol = dz
-            const oldBBCol = playerBB.clone()
-            dy = physics.stepHeight
+            const AABB3 = playerBB.clone()
+            dy = new JavaDouble(physics.stepHeight)
 
-            const queryBB = oldBB.clone().extend(oldVelX, dy, oldVelZ)
-            const surroundingBBs = getSurroundingBBs(world, queryBB)
-
-            const BB1 = oldBB.clone()
-            const BB2 = oldBB.clone()
-            const BB_XZ = BB1.clone().extend(dx, 0, dz)
+            const surroundingBBs = getSurroundingBBs(world, oldBB.clone().extend(oldVelX, dy, oldVelZ))
+            const AABB4 = oldBB.clone()
+            const AABB5 = AABB4.clone().extend(oldVelX, 0, oldVelZ)
 
             let dy1 = dy
-            let dy2 = dy
             for (const blockBB of surroundingBBs) {
-                dy1 = blockBB.computeOffsetY(BB_XZ, dy1)
-                dy2 = blockBB.computeOffsetY(BB2, dy2)
+                dy1 = new JavaDouble(blockBB.computeOffsetY(AABB5, dy1))
             }
-            BB1.offset(0, dy1, 0)
-            BB2.offset(0, dy2, 0)
+            AABB4.offset(0, dy1, 0)
 
             let dx1 = oldVelX
-            let dx2 = oldVelX
             for (const blockBB of surroundingBBs) {
-                dx1 = new JavaDouble(blockBB.computeOffsetX(BB1, dx1))
-                dx2 = new JavaDouble(blockBB.computeOffsetX(BB2, dx2))
+                dx1 = new JavaDouble(blockBB.computeOffsetX(AABB4, dx1))
             }
-            BB1.offset(dx1, 0, 0)
-            BB2.offset(dx2, 0, 0)
+            AABB4.offset(dx1, 0, 0)
 
             let dz1 = oldVelZ
+            for (const blockBB of surroundingBBs) {
+                dz1 = new JavaDouble(blockBB.computeOffsetZ(AABB4, dz1))
+            }
+            AABB4.offset(0, 0, dz1)
+
+            const AABB14 = oldBB.clone()
+
+            let dy2 = dy
+            for (const blockBB of surroundingBBs) {
+                dy2 = new JavaDouble(blockBB.computeOffsetY(AABB14, dy2))
+            }
+            AABB14.offset(0, dy2, 0)
+
+            let dx2 = oldVelX
+            for (const blockBB of surroundingBBs) {
+                dx2 = new JavaDouble(blockBB.computeOffsetX(AABB14, dx2))
+            }
+            AABB14.offset(dx2, 0, 0)
+
             let dz2 = oldVelZ
             for (const blockBB of surroundingBBs) {
-                dz1 = new JavaDouble(blockBB.computeOffsetZ(BB1, dz1))
-                dz2 = new JavaDouble(blockBB.computeOffsetZ(BB2, dz2))
+                dz2 = new JavaDouble(blockBB.computeOffsetZ(AABB14, dz2))
             }
-            BB1.offset(0, 0, dz1)
-            BB2.offset(0, 0, dz2)
+            AABB14.offset(0, 0, dz2)
 
             const norm1 = dx1.multiply(dx1).add(dz1.multiply(dz1))
             const norm2 = dx2.multiply(dx2).add(dz2.multiply(dz2))
 
-            if (norm1 > norm2) {
+            if (norm1.valueOf() > norm2.valueOf()) {
                 dx = dx1
-                dy = -dy1
                 dz = dz1
-                playerBB = BB1
+                dy = -dy1
+                playerBB = AABB4
             } else {
                 dx = dx2
-                dy = -dy2
                 dz = dz2
-                playerBB = BB2
+                dy = -dy2
+                playerBB = AABB14
             }
-
             for (const blockBB of surroundingBBs) {
                 dy = new JavaDouble(blockBB.computeOffsetY(playerBB, dy))
             }
@@ -761,7 +768,7 @@ function Physics(mcData, world) {
                 dx = oldVelXCol
                 dy = oldVelYCol
                 dz = oldVelZCol
-                playerBB = oldBBCol
+                playerBB = AABB3
             }
         }
 
