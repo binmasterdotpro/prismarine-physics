@@ -587,7 +587,9 @@ function Physics(mcData, world) {
                 if (playerState.jumpBoost > 0) {
                     motion.y = motion.y.add(new JavaDouble(new JavaFloat(playerState.jumpBoost).multiply(new JavaFloat(0.1))))
                 }
-                if (playerState.control.sprint) {
+                let forward = (playerState.control.forward - playerState.control.back)
+                const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
+                if (playerState.control.sprint && isSprintingApplicable) {
                     // notchian yaw is inverted
                     const notchianYaw = playerState.yawDegrees.multiply(DEG_TO_RAD)
                     motion.x = motion.x.subtract(new JavaDouble(sin32(notchianYaw).multiply(new JavaFloat(0.2))))
@@ -603,16 +605,17 @@ function Physics(mcData, world) {
         // movestrafing and moveforward are in range [-1.0, 1.0], already stored as F32
         let moveStrafing = new JavaFloat(
             playerState.control.right - playerState.control.left)
-            .multiply(new JavaFloat(0.98))
         let moveForward = new JavaFloat(
             playerState.control.forward - playerState.control.back)
-            .multiply(new JavaFloat(0.98))
 
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
         if (playerState.control.sneak) {
             moveStrafing = new JavaFloat(new JavaDouble(moveStrafing).multiply(physics.sneakSpeed))
             moveForward = new JavaFloat(new JavaDouble(moveForward).multiply(physics.sneakSpeed))
         }
+
+        moveStrafing = moveStrafing.multiply(new JavaFloat(0.98))
+        moveForward = moveForward.multiply(new JavaFloat(0.98))
 
         moveEntityWithHeading(playerState, world, moveStrafing, moveForward)
 
@@ -643,21 +646,19 @@ function Physics(mcData, world) {
         if (validSneak) {
             const step = new JavaDouble(0.05)
 
-            // todo: lets verify this claim
-            // In the 3 loops bellow, y offset should be -1, but that doesnt reproduce vanilla behavior.
-            for (; dx.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 0, 0)).length === 0; oldVelX = dx) {
+            for (; dx.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, -1.0, 0)).length === 0; oldVelX = dx) {
                 if (dx < step && dx >= -step) dx = new JavaDouble(0)
                 else if (dx > 0) dx = dx.subtract(step)
                 else dx = dx.add(step)
             }
 
-            for (; dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(0, 0, dz)).length === 0; oldVelZ = dz) {
+            for (; dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(0, -1.0, dz)).length === 0; oldVelZ = dz) {
                 if (dz < step && dz >= -step) dz = new JavaDouble(0)
                 else if (dz > 0) dz = dz.subtract(step)
                 else dz = dz.add(step)
             }
 
-            for (; dx.valueOf() !== 0 && dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, 1, dz)).length === 0; oldVelZ = dz) {
+            for (; dx.valueOf() !== 0 && dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, -1.0, dz)).length === 0; oldVelZ = dz) {
                 if (dx < step && dx >= -step) dx = new JavaDouble(0)
                 else if (dx > 0) dx = dx.subtract(step)
                 else dx = dx.add(step)
@@ -885,7 +886,6 @@ function Physics(mcData, world) {
         playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, physics.sprintingUUID) // always delete sprinting (if it exists)
 
         const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
-
         if (playerState.control.sprint && isSprintingApplicable && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
             playerSpeedAttribute = attribute.addAttributeModifier(playerSpeedAttribute, {
                 uuid: physics.sprintingUUID,
@@ -961,7 +961,8 @@ function Physics(mcData, world) {
             } else {
                 // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L631
                 let jumpMovementFactor = physics.airborneAcceleration
-                if (playerState.control.sprint) {
+                const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
+                if (playerState.control.sprint && isSprintingApplicable) {
                     jumpMovementFactor = new JavaFloat(
                         new JavaDouble(jumpMovementFactor).add(
                             new JavaDouble(physics.airborneAcceleration).multiply(new JavaDouble(0.3))
