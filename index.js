@@ -1217,14 +1217,14 @@ class PlayerState {
 
     apply(bot) {
         bot.entity.position = new Vec3(
-            this.pos.x,
-            this.pos.y,
-            this.pos.z
+            this.pos.x.valueOf(),
+            this.pos.y.valueOf(),
+            this.pos.z.valueOf()
         )
         bot.entity.velocity = new Vec3(
-            this.motion.x,
-            this.motion.y,
-            this.motion.z
+            this.motion.x.valueOf(),
+            this.motion.y.valueOf(),
+            this.motion.z.valueOf()
         )
         bot.entity.onGround = this.onGround
         bot.entity.isInWater = this.isInWater
