@@ -1196,8 +1196,8 @@ class PlayerState {
         // Input only (not modified)
         this.attributes = bot.entity.attributes
         // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-        this.yawDegrees = new JavaFloat(bot.entity.yawDegrees)
-        this.pitchDegrees = new JavaFloat(bot.entity.pitchDegrees)
+        this.yawDegrees = bot.entity.yawDegrees ? new JavaFloat(bot.entity.yawDegrees) : new JavaFloat((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
+        this.pitchDegrees = bot.entity.pitchDegrees ? new JavaFloat(bot.entity.pitchDegrees) : new JavaFloat(-bot.entity.pitch * RAD_TO_DEG)
         this.control = control
 
         // effects
