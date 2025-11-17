@@ -1,12 +1,15 @@
 const Vec3 = require('vec3').Vec3
+const mcData = require('minecraft-data')('1.8.9')
+const nbt = require('prismarine-nbt')
+
 const AABB = require('./lib/aabb')
 const features = require('./lib/features')
 const attribute = require('./lib/attribute')
-const nbt = require('prismarine-nbt')
 const { JavaFloat, JavaDouble, sin32, cos32, JavaInt, Vec3Double } = require('./lib/javamath')
 const { IntSet } = require('./lib/util')
+const { f32, f32div, f32mul, f32sin, f32cos, f32add, f32sub, clamp } = require('./lib/math')
 
-function makeSupportFeature (mcData) {
+function makeSupportFeature () {
   return feature => features.some(({
     name,
     versions
@@ -14,10 +17,10 @@ function makeSupportFeature (mcData) {
 }
 
 // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1578C42-L1578C53
-const DEG_TO_RAD = new JavaFloat(Math.PI).divide(new JavaFloat(180.0))
+const DEG_TO_RAD = f32div(f32(Math.PI), f32(180.0))
 const RAD_TO_DEG = 180.0 / Math.PI
 
-function Physics (mcData, world) {
+function Physics (_mcData, world) {
   const supportFeature = makeSupportFeature(mcData)
   const blocksByName = mcData.blocksByName
 
@@ -25,51 +28,58 @@ function Physics (mcData, world) {
     yawSpeed: 60.0,
     pitchSpeed: 30.0,
     // this.motionY -= 0.08D;, EntityLivingBase.java
-    gravity: new JavaDouble(0.08),
+    gravity: 0.08,
     // this.motionY *= 0.9800000190734863D;, EntityLivingBase.java. 32 bit equivalent of 0.98
-    airdrag: new JavaFloat(0.98),
+    airdrag: f32(0.98),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L163C5-L164C40
-    playerSpeed: new JavaFloat(0.1),
-    airborneAcceleration: new JavaFloat(0.02),
+    playerSpeed: f32(0.1),
+    airborneAcceleration: f32(0.02),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1610
-    airborneInertia: new JavaFloat(0.91),
-    sprintSpeed: new JavaFloat(0.3),
+    airborneInertia: f32(0.91),
+    sprintSpeed: f32(0.3),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
-    sneakSpeed: new JavaDouble(0.3),
+    sneakSpeed: 0.3,
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1974
-    negligeableVelocity: new JavaDouble(0.005),
-    negligeableFlyingSpeed: new JavaFloat(1.0E-4),
+    negligeableVelocity: 0.005,
+    negligeableFlyingSpeed: f32(1.0E-4),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L208
-    stepHeight: new JavaFloat(0.6), // how much height can the bot step on without jump
-    ladderMaxSpeed: new JavaFloat(0.15),
+    stepHeight: f32(0.6), // how much height can the bot step on without jump
+    ladderMaxSpeed: f32(0.15),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1594
-    liquidMotionY: new JavaDouble(0.03999999910593033),
+    liquidMotionY: 0.03999999910593033,
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1559
-    jumpMotionY: new JavaFloat(0.42),
-    ladderClimbSpeed: new JavaDouble(0.15),
+    jumpMotionY: f32(0.42),
+    ladderClimbSpeed: 0.15,
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L375
-    playerHalfWidth: new JavaFloat(0.6).divide(new JavaFloat(2)),
-    playerHeight: new JavaFloat(1.8),
-    waterInertia: new JavaFloat(0.8),
+    playerHalfWidth: f32div(f32(0.6), f32(2)),
+    playerHeight: f32(1.8),
+    waterInertia: f32(0.8),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1689
-    lavaInertia: new JavaDouble(0.5),
-    baseLiquidAcceleration: new JavaFloat(0.02),
+    lavaInertia: 0.5,
+    baseLiquidAcceleration: f32(0.02),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/Block.java#L291
-    defaultSlipperiness: new JavaFloat(0.6),
-    outOfLiquidImpulse: new JavaFloat(0.3),
+    defaultSlipperiness: f32(0.6),
+    outOfLiquidImpulse: f32(0.3),
     autojumpCooldown: 10, // ticks (0.5s)
     movementSpeedAttribute: mcData.attributesByName.movementSpeed.resource,
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L56
     sprintingUUID: '662a6b8d-da3e-4c1c-8813-96ea6097278d',
     // default slipperiness * friction
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1719C30-L1719C39
-    magicFriction: new JavaFloat(0.546),
+    magicFriction: f32(0.546),
     // seems like a different value is used for water??
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1719C28-L1719C38
-    magicFrictionWater: new JavaFloat(0.54600006),
-    magicFrictionCubed: new JavaFloat(0.16277136),
+    magicFrictionWater: f32(0.54600006),
+    magicFrictionCubed: f32(0.16277136),
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/block/BlockSoulSand.java#L30
-    soulsandSpeed: new JavaDouble(0.4),
+    soulsandSpeed: 0.4,
+    flowConstant: 0.014,
+    jumpBoostConstant: f32(0.1),
+    airSprintConstant: f32(0.2),
+    waterGravity: 0.02,
+    lavaGravity: 0.02,
+    moveMultiplier: f32(0.98),
+    striderConstant: f32(0.5)
   }
 
   const waterIds = [blocksByName.water.id, blocksByName.flowing_water ? blocksByName.flowing_water.id : -1]
@@ -77,17 +87,14 @@ function Physics (mcData, world) {
   const liquidIds = waterIds.concat(lavaIds)
   const blockSlipperiness = {}
   const slimeBlockId = blocksByName.slime_block ? blocksByName.slime_block.id : blocksByName.slime.id
-  blockSlipperiness[slimeBlockId] = new JavaFloat(0.8)
-  blockSlipperiness[blocksByName.ice.id] = new JavaFloat(0.98)
-  blockSlipperiness[blocksByName.packed_ice.id] = new JavaFloat(0.98)
+  blockSlipperiness[slimeBlockId] = f32(0.8)
+  blockSlipperiness[blocksByName.ice.id] = f32(0.98)
+  blockSlipperiness[blocksByName.packed_ice.id] = f32(0.98)
 
   const soulsandId = blocksByName.soul_sand.id
   const webId = blocksByName.cobweb ? blocksByName.cobweb.id : blocksByName.web.id
   const ladderId = blocksByName.ladder.id
   const vineId = blocksByName.vine.id
-
-  physics.waterGravity = new JavaDouble(0.02)
-  physics.lavaGravity = new JavaDouble(0.02)
 
   function getPlayerBB (pos) {
     const w = physics.playerHalfWidth
@@ -95,9 +102,9 @@ function Physics (mcData, world) {
   }
 
   function resetPositionToBB (bb, pos) {
-    pos.x = new JavaDouble((bb.minX + bb.maxX) / 2.0)
-    pos.y = new JavaDouble(bb.minY)
-    pos.z = new JavaDouble((bb.minZ + bb.maxZ) / 2.0)
+    pos.x = (bb.minX + bb.maxX) / 2.0
+    pos.y = bb.minY
+    pos.z = (bb.minZ + bb.maxZ) / 2.0
   }
 
   const wallIds = new IntSet([
@@ -549,51 +556,53 @@ function Physics (mcData, world) {
     const { motion, pos } = playerState
     if (playerState.jumpTicks > 0) playerState.jumpTicks--
     if (playerState.yaw) {
-      playerState.yawDegrees = new JavaFloat((Math.PI - playerState.yaw) * RAD_TO_DEG)
+      playerState.yawDegrees = f32((Math.PI - playerState.yaw) * RAD_TO_DEG)
     }
     if (playerState.pitch) {
-      playerState.pitchDegrees = new JavaFloat(-playerState.pitch * RAD_TO_DEG)
+      playerState.pitchDegrees = f32(-playerState.pitch * RAD_TO_DEG)
     }
 
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L1111
     const waterBB = getPlayerBB(pos).contract(
-      new JavaDouble(0.001),
-      new JavaDouble(new JavaFloat(0.400)),
-      new JavaDouble(0.001)
+      0.001,
+      f32(0.400),
+      0.001
     )
 
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L1216
     const lavaBB = getPlayerBB(pos).contract(
-      new JavaDouble(new JavaFloat(0.1)),
-      new JavaDouble(new JavaFloat(0.4)),
-      new JavaDouble(new JavaFloat(0.1))
+      f32(0.1),
+      f32(0.4),
+      f32(0.1)
     )
 
     playerState.isInWater = isInWaterApplyCurrent(world, waterBB, motion)
     playerState.isInLava = isMaterialInBB(world, lavaBB, lavaIds)
 
     // Reset velocity component if it falls under the threshold
-    if (motion.x.abs() < physics.negligeableVelocity) motion.x = new JavaDouble(0.0)
-    if (motion.y.abs() < physics.negligeableVelocity) motion.y = new JavaDouble(0.0)
-    if (motion.z.abs() < physics.negligeableVelocity) motion.z = new JavaDouble(0.0)
+    if (Math.abs(motion.x) < physics.negligeableVelocity) motion.x = 0.0
+    if (Math.abs(motion.y) < physics.negligeableVelocity) motion.y = 0.0
+    if (Math.abs(motion.z) < physics.negligeableVelocity) motion.z = 0.0
 
     // Handle inputs
     if (playerState.control.jump || playerState.jumpQueued) {
       // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1589
       if (playerState.isInWater || playerState.isInLava) {
-        motion.y = motion.y.add(physics.liquidMotionY)
+        motion.y += physics.liquidMotionY
       } else if (playerState.onGround && playerState.jumpTicks === 0) {
-        motion.y = new JavaDouble(physics.jumpMotionY)
+        motion.y = physics.jumpMotionY
         if (playerState.jumpBoost > 0) {
-          motion.y = motion.y.add(new JavaDouble(new JavaFloat(playerState.jumpBoost).multiply(new JavaFloat(0.1))))
+          // compliance: can do += here, because it takes the double representation of the f32mul
+          motion.y += f32mul(f32(playerState.jumpBoost), physics.jumpBoostConstant)
         }
         let forward = (playerState.control.forward - playerState.control.back)
         const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
         if (playerState.control.sprint && isSprintingApplicable) {
           // notchian yaw is inverted
-          const notchianYaw = playerState.yawDegrees.multiply(DEG_TO_RAD)
-          motion.x = motion.x.subtract(new JavaDouble(sin32(notchianYaw).multiply(new JavaFloat(0.2))))
-          motion.z = motion.z.add(new JavaDouble(cos32(notchianYaw).multiply(new JavaFloat(0.2))))
+          const notchianYaw = f32mul(playerState.yawDegrees, DEG_TO_RAD)
+          // compliance: can do -= and += here, because it also takes the double representation of the f32mul
+          motion.x -= f32mul(f32sin(notchianYaw), physics.airSprintConstant)
+          motion.z += f32mul(f32cos(notchianYaw), physics.airSprintConstant)
         }
         playerState.jumpTicks = physics.autojumpCooldown
       }
@@ -603,19 +612,17 @@ function Physics (mcData, world) {
     playerState.jumpQueued = false
 
     // movestrafing and moveforward are in range [-1.0, 1.0], already stored as F32
-    let moveStrafing = new JavaFloat(
-      playerState.control.right - playerState.control.left)
-    let moveForward = new JavaFloat(
-      playerState.control.forward - playerState.control.back)
+    let moveStrafing = f32(playerState.control.right - playerState.control.left)
+    let moveForward = f32(playerState.control.forward - playerState.control.back)
 
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
     if (playerState.control.sneak) {
-      moveStrafing = new JavaFloat(new JavaDouble(moveStrafing).multiply(physics.sneakSpeed))
-      moveForward = new JavaFloat(new JavaDouble(moveForward).multiply(physics.sneakSpeed))
+      moveStrafing = f32(moveStrafing * physics.sneakSpeed)
+      moveForward = f32(moveForward * physics.sneakSpeed)
     }
 
-    moveStrafing = moveStrafing.multiply(new JavaFloat(0.98))
-    moveForward = moveForward.multiply(new JavaFloat(0.98))
+    moveStrafing = f32mul(moveStrafing, physics.moveMultiplier)
+    moveForward = f32mul(moveForward, physics.moveMultiplier)
 
     moveEntityWithHeading(playerState, world, moveStrafing, moveForward)
 
@@ -628,15 +635,15 @@ function Physics (mcData, world) {
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L612
     if (playerState.isInWeb) {
       playerState.isInWeb = false
-      dx = dx.multiply(new JavaDouble(0.25))
-      dy = dy.multiply(new JavaDouble(new JavaFloat(0.05)))
-      dz = dz.multiply(new JavaDouble(0.25))
-      motion.x = new JavaDouble(0)
-      motion.y = new JavaDouble(0)
-      motion.z = new JavaDouble(0)
+      // compliance: double * double
+      dx *= 0.25
+      dy *= f32(0.05)
+      dz *= 0.25
+      motion.x = 0.0
+      motion.y = 0.0
+      motion.z = 0.0
     }
 
-    // cloning shouldn't matter, since all operations are non-mutable anyways
     let oldVelX = dx
     let oldVelY = dy
     let oldVelZ = dz
@@ -644,31 +651,31 @@ function Physics (mcData, world) {
     const validSneak = playerState.control.sneak && playerState.onGround
 
     if (validSneak) {
-      const step = new JavaDouble(0.05)
+      const step = 0.05
 
-      for (; dx.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, -1.0, 0)).length === 0; oldVelX = dx) {
-        if (dx < step && dx >= -step) dx = new JavaDouble(0)
-        else if (dx > 0) dx = dx.subtract(step)
-        else dx = dx.add(step)
+      for (; dx !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, -1.0, 0)).length === 0; oldVelX = dx) {
+        if (dx < step && dx >= -step) dx = 0
+        else if (dx > 0) dx -= step
+        else dx += step
       }
 
-      for (; dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(0, -1.0, dz)).length === 0; oldVelZ = dz) {
-        if (dz < step && dz >= -step) dz = new JavaDouble(0)
-        else if (dz > 0) dz = dz.subtract(step)
-        else dz = dz.add(step)
+      for (; dz !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(0, -1.0, dz)).length === 0; oldVelZ = dz) {
+        if (dz < step && dz >= -step) dz = 0
+        else if (dz > 0) dz -= step
+        else dz += step
       }
 
-      for (; dx.valueOf() !== 0 && dz.valueOf() !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, -1.0, dz)).length === 0; oldVelZ = dz) {
-        if (dx < step && dx >= -step) dx = new JavaDouble(0)
-        else if (dx > 0) dx = dx.subtract(step)
-        else dx = dx.add(step)
+      for (; dx !== 0 && dz !== 0 && getSurroundingBBs(world, getPlayerBB(pos).offset(dx, -1.0, dz)).length === 0; oldVelZ = dz) {
+        if (dx < step && dx >= -step) dx = 0
+        else if (dx > 0) dx -= step
+        else dx += step
 
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/Entity.java#L679
         oldVelX = dx
 
-        if (dz < step && dz >= -step) dz = new JavaDouble(0)
-        else if (dz > 0) dz = dz.subtract(step)
-        else dz = dz.add(step)
+        if (dz < step && dz >= -step) dz = 0
+        else if (dz > 0) dz -= step
+        else dz += step
       }
     }
 
@@ -678,31 +685,31 @@ function Physics (mcData, world) {
     const oldBB = playerBB.clone()
 
     for (const blockBB of surroundingBBs) {
-      dy = new JavaDouble(blockBB.computeOffsetY(playerBB, dy))
+      dy = blockBB.computeOffsetY(playerBB, dy)
     }
 
     playerBB.offset(0, dy, 0)
 
     for (const blockBB of surroundingBBs) {
-      dx = new JavaDouble(blockBB.computeOffsetX(playerBB, dx))
+      dx = blockBB.computeOffsetX(playerBB, dx)
     }
     playerBB.offset(dx, 0, 0)
 
     for (const blockBB of surroundingBBs) {
-      dz = new JavaDouble(blockBB.computeOffsetZ(playerBB, dz))
+      dz = blockBB.computeOffsetZ(playerBB, dz)
     }
 
     playerBB.offset(0, 0, dz)
 
-    const onGroundFlag = (playerState.onGround || (oldVelY.valueOf() !== dy.valueOf() && oldVelY < 0))
+    const onGroundFlag = (playerState.onGround || (oldVelY !== dy && oldVelY < 0))
 
     // Step on block if height < stepHeight
-    if (physics.stepHeight > 0 && onGroundFlag && (oldVelX.valueOf() !== dx.valueOf() || oldVelZ.valueOf() !== dz.valueOf())) {
+    if (physics.stepHeight > 0 && onGroundFlag && (oldVelX !== dx || oldVelZ !== dz)) {
       const oldVelXCol = dx
       const oldVelYCol = dy
       const oldVelZCol = dz
       const AABB3 = playerBB.clone()
-      dy = new JavaDouble(physics.stepHeight)
+      dy = physics.stepHeight
 
       const surroundingBBs = getSurroundingBBs(world, oldBB.clone().extend(oldVelX, dy, oldVelZ))
       const AABB4 = oldBB.clone()
@@ -710,19 +717,19 @@ function Physics (mcData, world) {
 
       let dy1 = dy
       for (const blockBB of surroundingBBs) {
-        dy1 = new JavaDouble(blockBB.computeOffsetY(AABB5, dy1))
+        dy1 = blockBB.computeOffsetY(AABB5, dy1)
       }
       AABB4.offset(0, dy1, 0)
 
       let dx1 = oldVelX
       for (const blockBB of surroundingBBs) {
-        dx1 = new JavaDouble(blockBB.computeOffsetX(AABB4, dx1))
+        dx1 = blockBB.computeOffsetX(AABB4, dx1)
       }
       AABB4.offset(dx1, 0, 0)
 
       let dz1 = oldVelZ
       for (const blockBB of surroundingBBs) {
-        dz1 = new JavaDouble(blockBB.computeOffsetZ(AABB4, dz1))
+        dz1 = blockBB.computeOffsetZ(AABB4, dz1)
       }
       AABB4.offset(0, 0, dz1)
 
@@ -730,26 +737,27 @@ function Physics (mcData, world) {
 
       let dy2 = dy
       for (const blockBB of surroundingBBs) {
-        dy2 = new JavaDouble(blockBB.computeOffsetY(AABB14, dy2))
+        dy2 = blockBB.computeOffsetY(AABB14, dy2)
       }
       AABB14.offset(0, dy2, 0)
 
       let dx2 = oldVelX
       for (const blockBB of surroundingBBs) {
-        dx2 = new JavaDouble(blockBB.computeOffsetX(AABB14, dx2))
+        dx2 = blockBB.computeOffsetX(AABB14, dx2)
       }
       AABB14.offset(dx2, 0, 0)
 
       let dz2 = oldVelZ
       for (const blockBB of surroundingBBs) {
-        dz2 = new JavaDouble(blockBB.computeOffsetZ(AABB14, dz2))
+        dz2 = blockBB.computeOffsetZ(AABB14, dz2)
       }
       AABB14.offset(0, 0, dz2)
 
-      const norm1 = dx1.multiply(dx1).add(dz1.multiply(dz1))
-      const norm2 = dx2.multiply(dx2).add(dz2.multiply(dz2))
+      // compliance: javadouble mult
+      const norm1 = dx1 * dx1 + dz1 * dz1
+      const norm2 = dx2 * dx2 + dz2 * dz2
 
-      if (norm1.valueOf() > norm2.valueOf()) {
+      if (norm1 > norm2) {
         dx = dx1
         dz = dz1
         dy = -dy1
@@ -761,11 +769,12 @@ function Physics (mcData, world) {
         playerBB = AABB14
       }
       for (const blockBB of surroundingBBs) {
-        dy = new JavaDouble(blockBB.computeOffsetY(playerBB, dy))
+        dy = blockBB.computeOffsetY(playerBB, dy)
       }
       playerBB.offset(0, dy, 0)
 
-      if (oldVelXCol.multiply(oldVelXCol).add(oldVelZCol.multiply(oldVelZCol)) >= dx.multiply(dx).add(dz.multiply(dz))) {
+      // compliance: javadouble mult
+      if (oldVelXCol * oldVelXCol + oldVelZCol * oldVelZCol >= dx * dx + dz * dz) {
         dx = oldVelXCol
         dy = oldVelYCol
         dz = oldVelZCol
@@ -776,8 +785,8 @@ function Physics (mcData, world) {
     // Update position (finally!)
     resetPositionToBB(playerBB, pos)
 
-    playerState.isCollidedHorizontally = dx.valueOf() !== oldVelX.valueOf() || dz.valueOf() !== oldVelZ.valueOf()
-    playerState.isCollidedVertically = dy.valueOf() !== oldVelY.valueOf()
+    playerState.isCollidedHorizontally = dx !== oldVelX || dz !== oldVelZ
+    playerState.isCollidedVertically = dy !== oldVelY
     playerState.onGround = playerState.isCollidedVertically && oldVelY < 0
 
     let blockPos = pos.offset(0, -0.2, 0).floored()
@@ -786,23 +795,23 @@ function Physics (mcData, world) {
     if (blockAtFeet?.type === 0) {
       const downBlock = world.getBlock(blockPos.offset(0, -1, 0))
 
-      // warn: string comp might be unreliable and cause performance issues!
       if (wallIds.has(downBlock.type) || fenceIds.has(downBlock.type) || fenceGateIds.has(downBlock.type)) {
         blockAtFeet = downBlock
       }
     }
 
-    if (dx.valueOf() !== oldVelX.valueOf()) {
-      motion.x = new JavaDouble(0)
+    // check if a collision happened in any of these directions
+    if (dx !== oldVelX) {
+      motion.x = 0.0
     }
-    if (dz.valueOf() !== oldVelZ.valueOf()) {
-      motion.z = new JavaDouble(0)
+    if (dz !== oldVelZ) {
+      motion.z = 0.0
     }
-    if (dy.valueOf() !== oldVelY.valueOf()) {
+    if (dy !== oldVelY) {
       if (blockAtFeet && blockAtFeet.type === slimeBlockId && !playerState.control.sneak) {
-        motion.y = new JavaDouble(-motion.y)
+        motion.y = -motion.y
       } else {
-        motion.y = new JavaDouble(0)
+        motion.y = 0
       }
     }
 
@@ -821,8 +830,8 @@ function Physics (mcData, world) {
           const block = world.getBlock(cursor)
           if (block) {
             if (block.type === soulsandId) {
-              motion.x.multiply(physics.soulsandSpeed)
-              motion.z.multiply(physics.soulsandSpeed)
+              motion.x *= physics.soulsandSpeed
+              motion.z *= physics.soulsandSpeed
             } else if (block.type === webId) {
               playerState.isInWeb = true
             }
@@ -836,21 +845,22 @@ function Physics (mcData, world) {
   function moveFlying (playerState, moveStrafe, moveForward, friction) {
     const { motion } = playerState
 
-    const speedSquared = moveStrafe.multiply(moveStrafe).add(moveForward.multiply(moveForward))
+    const speedSquared = f32add(f32mul(moveStrafe, moveStrafe), f32mul(moveForward, moveForward))
 
     if (speedSquared >= physics.negligeableFlyingSpeed) {
-      let speed = new JavaFloat(Math.sqrt(speedSquared))
-      if (speed < new JavaFloat(1.0)) {
-        speed = new JavaFloat(1.0)
+      let speed = f32(Math.sqrt(speedSquared))
+      if (speed < f32(1.0)) {
+        speed = f32(1.0)
       }
-      speed = friction.divide(speed)
-      moveStrafe = moveStrafe.multiply(speed)
-      moveForward = moveForward.multiply(speed)
+      speed = f32div(friction, speed)
+      moveStrafe = f32mul(moveStrafe, speed)
+      moveForward = f32mul(moveForward, speed)
 
-      const sin = sin32(playerState.yawDegrees.multiply(DEG_TO_RAD))
-      const cos = cos32(playerState.yawDegrees.multiply(DEG_TO_RAD))
-      motion.x = motion.x.add(new JavaDouble(moveStrafe.multiply(cos).subtract(moveForward.multiply(sin))))
-      motion.z = motion.z.add(new JavaDouble(moveForward.multiply(cos).add(moveStrafe.multiply(sin))))
+      const sin = f32sin(f32mul(playerState.yawDegrees, DEG_TO_RAD))
+      const cos = f32cos(f32mul(playerState.yawDegrees, DEG_TO_RAD))
+      // compliance: can do += and -= here, because it also takes the double representation of the f32mul
+      motion.x += f32sub(f32mul(moveStrafe, cos), f32mul(moveForward, sin))
+      motion.z += f32add(f32mul(moveForward, cos), f32mul(moveStrafe, sin))
     }
   }
 
@@ -894,53 +904,48 @@ function Physics (mcData, world) {
       })
     }
 
-    const attributeSpeed = new JavaFloat(attribute.getAttributeValue(playerSpeedAttribute))
+    const attributeSpeed = f32(attribute.getAttributeValue(playerSpeedAttribute))
 
     if (playerState.isInWater) {
       // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1701
       const lastY = pos.y
       let inertia = physics.waterInertia
       let acceleration = physics.baseLiquidAcceleration
-      let strider = new JavaFloat(Math.min(playerState.depthStrider, 3))
+      let strider = f32(Math.min(playerState.depthStrider, 3))
 
       if (!playerState.onGround) {
-        strider = strider.multiply(new JavaFloat(0.5))
+        strider = f32mul(strider, physics.striderConstant)
       }
 
-      if (strider.valueOf() > 0) {
-        inertia = inertia.add(
-          (new JavaFloat(0.54600006)
-            .subtract(inertia))
-            .multiply(strider)
-            .divide(new JavaFloat(3.0))
+      if (strider > 0.0) {
+        inertia = f32add(inertia,
+          f32div(f32mul(f32sub(physics.magicFrictionWater, inertia), strider), f32(3.0))
         )
-        acceleration = acceleration.add(
-          (attributeSpeed.subtract(acceleration))
-            .multiply(strider)
-            .divide(3.0)
+        acceleration = f32add(acceleration,
+          f32div(f32mul(f32sub(attributeSpeed, acceleration), strider), f32(3.0))
         )
       }
 
       moveFlying(playerState, strafe, forward, acceleration)
       moveEntity(playerState, world, motion.x, motion.y, motion.z)
 
-      motion.x = motion.x.multiply(new JavaDouble(inertia))
-      motion.y = motion.y.multiply(new JavaDouble(physics.waterInertia))
-      motion.z = motion.z.multiply(new JavaDouble(inertia))
-      motion.y = motion.y.subtract(physics.waterGravity)
-      if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y.add(new JavaDouble(0.6)).subtract(pos.y).add(lastY), motion.z))) {
-        motion.y = new JavaDouble(physics.outOfLiquidImpulse) // jump out of liquid
+      motion.x *= inertia
+      motion.y *= physics.waterInertia
+      motion.z *= inertia
+      motion.y = physics.waterGravity
+      if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
+        motion.y = physics.outOfLiquidImpulse
       }
     } else if (playerState.isInLava) {
       const lastY = pos.y
       moveFlying(playerState, strafe, forward, physics.baseLiquidAcceleration)
       moveEntity(playerState, world, motion.x, motion.y, motion.z)
-      motion.x = motion.x.multiply(physics.lavaInertia)
-      motion.y = motion.y.multiply(physics.lavaInertia)
-      motion.z = motion.z.multiply(physics.lavaInertia)
-      motion.y = motion.y.subtract(physics.lavaGravity)
-      if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y.add(new JavaDouble(0.6)).subtract(pos.y).add(lastY), motion.z))) {
-        motion.y = new JavaDouble(physics.outOfLiquidImpulse)
+      motion.x *= physics.lavaInertia
+      motion.y *= physics.lavaInertia
+      motion.z *= physics.lavaInertia
+      motion.y *= physics.lavaGravity
+      if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
+        motion.y = physics.outOfLiquidImpulse
       }
     } else {
       // Normal movement
@@ -949,24 +954,21 @@ function Physics (mcData, world) {
         const blockUnder = world.getBlock(pos.floored().offset(0, -1, 0))
         const slipperiness = blockUnder?.type && typeof blockSlipperiness[blockUnder.type] === 'number' ?
           blockSlipperiness[blockUnder.type] : physics.defaultSlipperiness
-        inertia = new JavaFloat(slipperiness).multiply(new JavaFloat(0.91))
-
+        inertia = f32mul(slipperiness, physics.airborneInertia)
       }
 
-      const accelerationScale = physics.magicFrictionCubed.divide(inertia.multiply(inertia).multiply(inertia))
+      const accelerationScale = f32div(physics.magicFrictionCubed, f32mul(inertia, f32mul(inertia, inertia)))
       // todo: change attributespeed to be javafloat
       let acceleration
       if (playerState.onGround) {
-        acceleration = attributeSpeed.multiply(accelerationScale)
+        acceleration = f32mul(attributeSpeed, accelerationScale)
       } else {
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L631
         let jumpMovementFactor = physics.airborneAcceleration
         const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
         if (playerState.control.sprint && isSprintingApplicable) {
-          jumpMovementFactor = new JavaFloat(
-            new JavaDouble(jumpMovementFactor).add(
-              new JavaDouble(physics.airborneAcceleration).multiply(new JavaDouble(0.3))
-            )
+          jumpMovementFactor = f32(
+            jumpMovementFactor + physics.airborneAcceleration * 0.3
           )
         }
         acceleration = jumpMovementFactor
@@ -975,20 +977,20 @@ function Physics (mcData, world) {
       moveFlying(playerState, strafe, forward, acceleration)
 
       if (isOnLadder(world, pos)) {
-        motion.x = motion.x.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
-        motion.z = motion.x.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
+        motion.x = clamp(-physics.ladderMaxSpeed, motion.x, physics.ladderMaxSpeed)
+        motion.z = clamp(-physics.ladderMaxSpeed, motion.z, physics.ladderMaxSpeed)
         if (motion.y < -physics.ladderClimbSpeed) {
           // clone it
-          motion.y = new JavaDouble(-physics.ladderClimbSpeed)
+          motion.y = -physics.ladderClimbSpeed
         }
-        if (playerState.control.sneak && motion.y < new JavaDouble(0)) {
-          motion.y = new JavaDouble(0)
+        if (playerState.control.sneak && motion.y < 0) {
+          motion.y = 0
         }
       }
 
       moveEntity(playerState, world, motion.x, motion.y, motion.z)
 
-      if (isOnLadder(world, new Vec3(pos.x, pos.y, pos.z)) && (playerState.isCollidedHorizontally ||
+      if (isOnLadder(world, pos) && (playerState.isCollidedHorizontally ||
         (supportFeature('climbUsingJump') && playerState.control.jump))) {
         motion.y = physics.ladderClimbSpeed // climb ladder
       }
@@ -997,17 +999,17 @@ function Physics (mcData, world) {
       // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1664
       if (!world.getBlock(new Vec3(pos.x, 0, pos.z).floored())) {
         if (pos.y > 0) {
-          motion.y = new JavaDouble(-0.1)
+          motion.y = -0.1
         } else {
-          motion.y = new JavaDouble(0)
+          motion.y = 0
         }
       } else {
-        motion.y = motion.y.subtract(physics.gravity)
+        motion.y -= physics.gravity
       }
 
-      motion.y = motion.y.multiply(new JavaDouble(physics.airdrag))
-      motion.x = motion.x.multiply(new JavaDouble(inertia))
-      motion.z = motion.z.multiply(new JavaDouble(inertia))
+      motion.y *= physics.airdrag
+      motion.x *= inertia
+      motion.z *= inertia
     }
   }
 
@@ -1039,7 +1041,7 @@ function Physics (mcData, world) {
   function getFlow (world, block) {
     const pos = block.position
     const curLevel = getRenderedDepth(block)
-    const flow = new Vec3Double(0.0, 0.0, 0.0)
+    const flow = new Vec3(0.0, 0.0, 0.0)
 
     const directions = [
       [1, 0],
@@ -1103,7 +1105,7 @@ function Physics (mcData, world) {
 
     // Always assume area loaded
     let flag = false
-    let vec3 = new Vec3Double(0.0, 0.0, 0.0)
+    let vec3 = new Vec3(0.0, 0.0, 0.0)
     const cursor = new Vec3(0, 0, 0)
 
     for (cursor.x = minX; cursor.x < maxX; cursor.x++) {
@@ -1112,18 +1114,13 @@ function Physics (mcData, world) {
           const block = world.getBlock(cursor)
           if (!block) continue
           if (waterIds.includes(block.type)) {
-            const liquidHeight = new JavaDouble(cursor.y + 1)
-              .subtract(new JavaDouble(getLiquidHeightPcent(block)))
+            const liquidHeight = (cursor.y + 1) - getLiquidHeightPcent(block)
 
-            if (new JavaDouble(bb.maxY) >= liquidHeight) {
+            if (bb.maxY >= liquidHeight) {
               flag = true
               // equivalent to Block.modifyAcceleration(world, pos, entity, vec3)
               const flow = getFlow(world, block)
-              vec3 = new Vec3Double(
-                vec3.x.add(flow.x),
-                vec3.y.add(flow.y),
-                vec3.z.add(flow.z)
-              )
+              vec3.add(flow)
             }
           }
         }
@@ -1131,12 +1128,11 @@ function Physics (mcData, world) {
     }
 
     // todo: technically, should check if entity.isPushedByWater (!this.capabilities.isFlying), but since flying is not implemented, ignore that part
-    if (vec3.length() > new JavaDouble(0.0)) {
+    if (vec3.norm() > 0.0) {
       const normalized = vec3.normalize()
-      const d1 = new JavaDouble(0.014)
-      motion.x = motion.x.add(normalized.x.multiply(d1))
-      motion.y = motion.y.add(normalized.y.multiply(d1))
-      motion.z = motion.z.add(normalized.z.multiply(d1))
+      motion.x += normalized.x * physics.flowConstant
+      motion.y += normalized.y * physics.flowConstant
+      motion.z += normalized.z * physics.flowConstant
     }
 
     return flag
@@ -1145,6 +1141,7 @@ function Physics (mcData, world) {
   return physics
 }
 
+// already accounts for the + 1
 function getEffectLevel (mcData, effectName, effects) {
   const effectDescriptor = mcData.effectsByName[effectName]
   if (!effectDescriptor) {
@@ -1177,10 +1174,8 @@ function getEnchantmentLevel (mcData, enchantmentName, enchantments) {
 
 class PlayerState {
   constructor (bot, control) {
-    const mcData = require('minecraft-data')(bot.version)
-
-    this.pos = new Vec3Double(bot.entity.position.x, bot.entity.position.y, bot.entity.position.z)
-    this.motion = new Vec3Double(bot.entity.velocity.x, bot.entity.velocity.y, bot.entity.velocity.z)
+    this.pos = bot.entity.position.clone()
+    this.motion = bot.entity.velocity.clone()
 
     this.onGround = bot.entity.onGround
     this.isInWater = bot.entity.isInWater
@@ -1197,14 +1192,14 @@ class PlayerState {
     this.yaw = bot.entity.yaw
     this.pitch = bot.entity.pitch
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-    this.yawDegrees = bot.entity.yawDegrees ? new JavaFloat(bot.entity.yawDegrees) : new JavaFloat((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
-    this.pitchDegrees = bot.entity.pitchDegrees ? new JavaFloat(bot.entity.pitchDegrees) : new JavaFloat(-bot.entity.pitch * RAD_TO_DEG)
+    this.yawDegrees = bot.entity.yawDegrees ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
+    this.pitchDegrees = bot.entity.pitchDegrees ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
 
     this.control = control
 
     // effects
     const effects = bot.entity.effects
-    this.jumpBoost = new JavaInt(getEffectLevel(mcData, 'JumpBoost', effects))
+    this.jumpBoost = getEffectLevel(mcData, 'JumpBoost', effects)
     // armour enchantments
     const boots = bot.inventory.slots[8]
     if (boots && boots.nbt) {
