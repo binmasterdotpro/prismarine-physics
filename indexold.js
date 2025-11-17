@@ -1130,7 +1130,7 @@ function Physics (mcData, world) {
     }
 
     // todo: technically, should check if entity.isPushedByWater (!this.capabilities.isFlying), but since flying is not implemented, ignore that part
-    if (vec3.length() > new JavaDouble(0.0)) {
+    if (vec3.norm() > new JavaDouble(0.0)) {
       const normalized = vec3.normalize()
       const d1 = new JavaDouble(0.014)
       motion.x = motion.x.add(normalized.x.multiply(d1))
