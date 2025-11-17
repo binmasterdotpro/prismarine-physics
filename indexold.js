@@ -820,8 +820,8 @@ function Physics (mcData, world) {
           const block = world.getBlock(cursor)
           if (block) {
             if (block.type === soulsandId) {
-              motion.x.multiply(physics.soulsandSpeed)
-              motion.z.multiply(physics.soulsandSpeed)
+              motion.x = motion.x.multiply(physics.soulsandSpeed)
+              motion.z = motion.z.multiply(physics.soulsandSpeed)
             } else if (block.type === webId) {
               playerState.isInWeb = true
             }
