@@ -975,7 +975,7 @@ function Physics (mcData, world) {
 
       if (isOnLadder(world, pos)) {
         motion.x = motion.x.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
-        motion.z = motion.x.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
+        motion.z = motion.z.clamp(new JavaDouble(-physics.ladderMaxSpeed), new JavaDouble(physics.ladderMaxSpeed))
         if (motion.y < -physics.ladderClimbSpeed) {
           // clone it
           motion.y = new JavaDouble(-physics.ladderClimbSpeed)
