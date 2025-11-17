@@ -68,4 +68,4 @@ for (let i = 0; i < runs; i++) {
   console.log(`Landed at Y=${player.entity.position.y} after ${ticks} ticks (${(performance.now() - start).toFixed(2)} ms)`)
 }
 
-console.log(`Average time: ${(totalTime / runs).toFixed(2)} ms over ${runs} runs`)
+console.log(`Average time (new): ${(totalTime / runs).toFixed(2)} ms over ${runs} runs`)

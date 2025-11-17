@@ -4,6 +4,7 @@ const features = require('./lib/features')
 const attribute = require('./lib/attribute')
 const nbt = require('prismarine-nbt')
 const { JavaFloat, JavaDouble, sin32, cos32, JavaInt, Vec3Double } = require('./lib/javamath')
+const { IntSet } = require('./lib/util')
 
 function makeSupportFeature (mcData) {
   return feature => features.some(({
@@ -99,30 +100,30 @@ function Physics (mcData, world) {
     pos.z = new JavaDouble((bb.minZ + bb.maxZ) / 2.0)
   }
 
-  const wallIds = new Set([
+  const wallIds = new IntSet([
     'cobblestone_wall'
-  ])
+  ].map(nameToId))
 
-  const fenceIds = new Set([
-    'oak_fence',
+  const fenceIds = new IntSet([
+    'fence',
     'spruce_fence',
     'birch_fence',
     'jungle_fence',
     'acacia_fence',
     'dark_oak_fence',
     'nether_brick_fence',
-  ])
+  ].map(nameToId))
 
-  const fenceGateIds = new Set([
-    'oak_fence_gate',
+  const fenceGateIds = new IntSet([
+    'fence_gate',
     'spruce_fence_gate',
     'birch_fence_gate',
     'jungle_fence_gate',
     'acacia_fence_gate',
     'dark_oak_fence_gate',
-  ])
+  ].map(nameToId))
 
-  const stairIds = new Set([
+  const stairIds = new IntSet([
     'oak_stairs',
     'stone_stairs',
     'brick_stairs',
@@ -136,20 +137,18 @@ function Physics (mcData, world) {
     'acacia_stairs',
     'dark_oak_stairs',
     'red_sandstone_stairs',
-    'purpur_stairs',
-  ])
+  ].map(nameToId))
 
-  const glassPaneIds = new Set([
+  const glassPaneIds = new IntSet([
     'glass_pane',
     'stained_glass_pane',
-  ])
+  ].map(nameToId))
 
-  const CARDINAL_NOMENCLATURE = [
-    'north',
-    'east',
-    'south',
-    'west'
-  ]
+  function nameToId (name) {
+    const block = mcData.blocksByName[name]
+    if (!block) throw new Error(`Block not found: ${name}`)
+    return block.id
+  }
 
   const CARDINAL = [
     // north -z
@@ -182,19 +181,19 @@ function Physics (mcData, world) {
   function updateFenceBB (connectDirection, boundingBox) {
     switch (connectDirection) {
       case 0: // north (-z)
-        // extends from center to full north edge
+              // extends from center to full north edge
         boundingBox.push([0.375, 0.0, 0.0, 0.625, 1.5, 0.375])
         break
       case 1: // east (+x)
-        // extends from center to full east edge
+              // extends from center to full east edge
         boundingBox.push([0.625, 0.0, 0.375, 1.0, 1.5, 0.625])
         break
       case 2: // south (+z)
-        // extends from center to full south edge
+              // extends from center to full south edge
         boundingBox.push([0.375, 0.0, 0.625, 0.625, 1.5, 1.0])
         break
       case 3: // west (-x)
-        // extends from center to full west edge
+              // extends from center to full west edge
         boundingBox.push([0.0, 0.0, 0.375, 0.375, 1.5, 0.625])
         break
     }
@@ -207,7 +206,7 @@ function Physics (mcData, world) {
     for (let i = 0; i < CARDINAL.length; i++) {
       // update the wall properties and the bounding box
       const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
-      if (!neighborBlock || !wallIds.has(neighborBlock.name)) continue
+      if (!neighborBlock || !wallIds.has(neighborBlock.type)) continue
       updateWallBB(i, baseBoundingBox)
     }
     return baseBoundingBox
@@ -218,7 +217,7 @@ function Physics (mcData, world) {
     for (let i = 0; i < CARDINAL.length; i++) {
       // update the fence properties and the bounding box
       const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
-      if (!neighborBlock || (!fenceIds.has(neighborBlock.name) && !fenceGateIds.has(neighborBlock.name))) continue
+      if (!neighborBlock || (!fenceIds.has(neighborBlock.type) && !fenceGateIds.has(neighborBlock.type))) continue
       updateFenceBB(i, baseBoundingBox)
     }
     return baseBoundingBox
@@ -255,7 +254,7 @@ function Physics (mcData, world) {
     const back = world.getBlock(backPos)
 
     function sameHalf (block) {
-      return block && stairIds.has(block.name) && isTopHalf(block) === halfTop
+      return block && stairIds.has(block.type) && isTopHalf(block) === halfTop
     }
 
     // ---- OUTER CORNERS ----
@@ -456,7 +455,7 @@ function Physics (mcData, world) {
     }
   }
 
-  const glassPaneCanConnect = new Set(['glass', 'stained_glass'])
+  const glassPaneCanConnect = new IntSet(['glass', 'stained_glass'].map(nameToId))
 
   function computePaneBB (world, origin) {
     const baseBoxes = []
@@ -464,7 +463,7 @@ function Physics (mcData, world) {
     // Helper: determines if a glass pane connects to the given neighbor
     function canConnect (block) {
       if (!block) return false
-      if (glassPaneIds.has(block.name) || glassPaneCanConnect.has(block.name)) return true
+      if (glassPaneIds.has(block.type) || glassPaneCanConnect.has(block.type)) return true
       if (block.boundingBox && block.boundingBox !== 'empty') return block.boundingBox !== 'empty'
       return false
     }
@@ -506,6 +505,8 @@ function Physics (mcData, world) {
     return baseBoxes
   }
 
+  const snowLayerId = blocksByName.snow_layer.id
+
   function getSurroundingBBs (world, queryBB) {
     const surroundingBBs = []
     const cursor = new Vec3(0, 0, 0)
@@ -516,17 +517,17 @@ function Physics (mcData, world) {
           if (block) {
             const blockPos = block.position
             let shapes = block.shapes
-            if (wallIds.has(block.name)) {
+            if (wallIds.has(block.type)) {
               shapes = computeWallBB(world, blockPos)
-            } else if (stairIds.has(block.name)) {
+            } else if (stairIds.has(block.type)) {
               shapes = computeStairBB(world, blockPos, block)
-            } else if (fenceIds.has(block.name)) {
+            } else if (fenceIds.has(block.type)) {
               shapes = computeFenceBB(world, blockPos)
-            } else if (glassPaneIds.has(block.name)) {
+            } else if (glassPaneIds.has(block.type)) {
               shapes = computePaneBB(world, blockPos)
-            } else if (block.name === 'snow_layer' && block._properties.layers === 8) {
+            } else if (block.type === snowLayerId && block._properties.layers === 8) {
               const blockAbove = world.getBlock(blockPos.offset(0, 1, 0))
-              if (blockAbove && blockAbove.name === 'snow_layer') {
+              if (blockAbove && blockAbove.type === snowLayerId) {
                 shapes = [[0, 0, 0, 1, 1, 1]]
               }
             }
@@ -786,7 +787,7 @@ function Physics (mcData, world) {
       const downBlock = world.getBlock(blockPos.offset(0, -1, 0))
 
       // warn: string comp might be unreliable and cause performance issues!
-      if (downBlock.name.endsWith('wall') || downBlock.name.startsWith('fence')) {
+      if (wallIds.has(downBlock.type) || fenceIds.has(downBlock.type) || fenceGateIds.has(downBlock.type)) {
         blockAtFeet = downBlock
       }
     }
@@ -864,9 +865,9 @@ function Physics (mcData, world) {
 
   function isOffsetPositionInLiquid (world, pos) {
     const pBB = getPlayerBB(pos)
-    return !getSurroundingBBs(world, pBB).some(x => pBB.intersects(x)) &&
+    return !getSurroundingBBs(world, pBB).some(x => pBB.intersects(x))
       // any materialliquid, which is lava and water
-      !isMaterialInBB(world, pBB, liquidIds)
+      && !isMaterialInBB(world, pBB, liquidIds)
   }
 
   function moveEntityWithHeading (playerState, world, strafe, forward) {
@@ -1198,6 +1199,7 @@ class PlayerState {
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
     this.yawDegrees = bot.entity.yawDegrees ? new JavaFloat(bot.entity.yawDegrees) : new JavaFloat((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
     this.pitchDegrees = bot.entity.pitchDegrees ? new JavaFloat(bot.entity.pitchDegrees) : new JavaFloat(-bot.entity.pitch * RAD_TO_DEG)
+
     this.control = control
 
     // effects
@@ -1239,4 +1241,4 @@ class PlayerState {
   }
 }
 
-module.exports = { Physics, PlayerState: PlayerState }
+module.exports = { Physics, PlayerState }

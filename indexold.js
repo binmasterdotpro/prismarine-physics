@@ -182,19 +182,19 @@ function Physics (mcData, world) {
   function updateFenceBB (connectDirection, boundingBox) {
     switch (connectDirection) {
       case 0: // north (-z)
-        // extends from center to full north edge
+              // extends from center to full north edge
         boundingBox.push([0.375, 0.0, 0.0, 0.625, 1.5, 0.375])
         break
       case 1: // east (+x)
-        // extends from center to full east edge
+              // extends from center to full east edge
         boundingBox.push([0.625, 0.0, 0.375, 1.0, 1.5, 0.625])
         break
       case 2: // south (+z)
-        // extends from center to full south edge
+              // extends from center to full south edge
         boundingBox.push([0.375, 0.0, 0.625, 0.625, 1.5, 1.0])
         break
       case 3: // west (-x)
-        // extends from center to full west edge
+              // extends from center to full west edge
         boundingBox.push([0.0, 0.0, 0.375, 0.375, 1.5, 0.625])
         break
     }
@@ -864,9 +864,9 @@ function Physics (mcData, world) {
 
   function isOffsetPositionInLiquid (world, pos) {
     const pBB = getPlayerBB(pos)
-    return !getSurroundingBBs(world, pBB).some(x => pBB.intersects(x)) &&
+    return !getSurroundingBBs(world, pBB).some(x => pBB.intersects(x))
       // any materialliquid, which is lava and water
-      !isMaterialInBB(world, pBB, liquidIds)
+      && !isMaterialInBB(world, pBB, liquidIds)
   }
 
   function moveEntityWithHeading (playerState, world, strafe, forward) {
