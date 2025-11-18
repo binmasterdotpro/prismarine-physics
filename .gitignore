@@ -2,3 +2,10 @@ node_modules/
 package-lock.json
 .vscode
 .idea
+
+**/*.log
+**/*.DS_Store
+**/*.svg
+**/*.out
+**/*.data
+**/*.data.old
