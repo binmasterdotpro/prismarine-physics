@@ -1,5 +1,6 @@
 const Vec3 = require('vec3').Vec3
 const mcData = require('minecraft-data')('1.8.9')
+const mcDataRegistry = require('minecraft-data')
 const nbt = require('prismarine-nbt')
 
 const AABB = require('./lib/aabb')
@@ -1186,11 +1187,15 @@ class PlayerState {
     this.jumpQueued = bot.jumpQueued
     this.fireworkRocketDuration = bot.fireworkRocketDuration
 
+    console.log(bot.entity.yawDegrees)
+
     // Input only (not modified)
     this.attributes = bot.entity.attributes
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
     this.yawDegrees = typeof bot.entity.yawDegrees?.valueOf() === 'number' ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
     this.pitchDegrees = typeof bot.entity.pitchDegrees?.valueOf() === 'number' ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
+
+    console.log(bot.entity.yawDegrees, this.yawDegrees)
 
     this.control = control
 
@@ -1239,6 +1244,18 @@ class FastWorld {
 
   static {
     const shapes = mcData.blockCollisionShapes
+    const legacyPcBlocksByIdmeta = Object.entries(mcDataRegistry.legacy.pc.blocks).reduce((obj, [idmeta, name]) => {
+      const s = name.split('[')[1]?.replace(']', '')
+      obj[idmeta] = s
+        ? Object.fromEntries(s.split(',').map(s => {
+          let [k, v] = s.split('=')
+          if (!isNaN(parseInt(v))) v = parseInt(v)
+          return [k, v]
+        }))
+        : {}
+      return obj // array of { '255:0': { mode: 'save' }, }
+    }, {})
+
     for (const stateId in mcData.blocksByStateId) {
       const block = mcData.blocksByStateId[stateId]
       const shapesId = shapes.blocks[block.name]
@@ -1253,10 +1270,23 @@ class FastWorld {
         console.warn(`No shape for block ${block.name}, stateId ${stateId}!`)
         shape = [[0, 0, 0, 1, 1, 1]]
       }
+      // equivalent to stateId % 16 or stateId - minStateId
+      const metadata = stateId & 15
+      let _properties = legacyPcBlocksByIdmeta[block.id + ':' + metadata] || legacyPcBlocksByIdmeta[block.id + ':0']
+      if (!_properties) {
+        for (let i = 0; i <= 15; i++) {
+          _properties = legacyPcBlocksByIdmeta[block.id + ':' + i]
+          if (_properties) break
+        }
+      }
+      if (!_properties) {
+        console.warn(`No legacy properties for block ${block.name}, stateId ${stateId}, id:meta ${block.id}:${metadata}`)
+      }
       FastWorld.#stateToBlock[stateId] = {
         type: block.id,
         boundingBox: block.boundingBox,
         shapes: baseShape,
+        _properties: _properties
       }
     }
   }
@@ -1266,6 +1296,7 @@ class FastWorld {
   }
 
   getBlock (pos) {
+    pos = pos.floored()
     const chunk = this.bot.world.getColumnAt(pos)
     if (!chunk) return null
     const section = chunk.getBlockStateId(pos)
@@ -1274,7 +1305,7 @@ class FastWorld {
     if (!blockData) throw new Error(`No block data for state ID ${section}`)
     return {
       ...blockData,
-      position: pos.clone(),
+      position: pos,
     }
   }
 }
