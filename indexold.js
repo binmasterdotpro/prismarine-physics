@@ -4,6 +4,7 @@ const features = require('./lib/features')
 const attribute = require('./lib/attribute')
 const nbt = require('prismarine-nbt')
 const { JavaFloat, JavaDouble, sin32, cos32, JavaInt, Vec3Double } = require('./lib/javamath')
+const { f32 } = require('./lib/math')
 
 function makeSupportFeature (mcData) {
   return feature => features.some(({
@@ -547,10 +548,10 @@ function Physics (mcData, world) {
   physics.simulatePlayer = (playerState, world) => {
     const { motion, pos } = playerState
     if (playerState.jumpTicks > 0) playerState.jumpTicks--
-    if (playerState.yaw) {
+    if (!isNaN(playerState.yaw)) {
       playerState.yawDegrees = new JavaFloat((Math.PI - playerState.yaw) * RAD_TO_DEG)
     }
-    if (playerState.pitch) {
+    if (!isNaN(playerState.pitch)) {
       playerState.pitchDegrees = new JavaFloat(-playerState.pitch * RAD_TO_DEG)
     }
 
@@ -1193,12 +1194,9 @@ class PlayerState {
 
     // Input only (not modified)
     this.attributes = bot.entity.attributes
-    this.yaw = bot.entity.yaw
-    this.pitch = bot.entity.pitch
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-    this.yawDegrees = bot.entity.yawDegrees ? new JavaFloat(bot.entity.yawDegrees) : new JavaFloat((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
-    this.pitchDegrees = bot.entity.pitchDegrees ? new JavaFloat(bot.entity.pitchDegrees) : new JavaFloat(-bot.entity.pitch * RAD_TO_DEG)
-
+    this.yawDegrees = typeof bot.entity.yawDegrees === 'number' ? new JavaFloat(bot.entity.yawDegrees) : new JavaFloat((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
+    this.pitchDegrees = typeof bot.entity.pitchDegrees === 'number' ? new JavaFloat(bot.entity.pitchDegrees) : new JavaFloat(-bot.entity.pitch * RAD_TO_DEG)
     this.control = control
 
     // effects

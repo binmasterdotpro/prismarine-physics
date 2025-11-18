@@ -554,10 +554,10 @@ function Physics (_mcData, world) {
   physics.simulatePlayer = (playerState, world) => {
     const { motion, pos } = playerState
     if (playerState.jumpTicks > 0) playerState.jumpTicks--
-    if (playerState.yaw) {
+    if (!isNaN(playerState.yaw)) {
       playerState.yawDegrees = f32((Math.PI - playerState.yaw) * RAD_TO_DEG)
     }
-    if (playerState.pitch) {
+    if (!isNaN(playerState.pitch)) {
       playerState.pitchDegrees = f32(-playerState.pitch * RAD_TO_DEG)
     }
 
@@ -1188,11 +1188,9 @@ class PlayerState {
 
     // Input only (not modified)
     this.attributes = bot.entity.attributes
-    this.yaw = bot.entity.yaw
-    this.pitch = bot.entity.pitch
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-    this.yawDegrees = bot.entity.yawDegrees ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
-    this.pitchDegrees = bot.entity.pitchDegrees ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
+    this.yawDegrees = typeof bot.entity.yawDegrees === 'number' ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
+    this.pitchDegrees = typeof bot.entity.pitchDegrees === 'number' ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
 
     this.control = control
 

@@ -1,10 +1,12 @@
 const { Physics: PhysicsNew, PlayerState: PlayerStateNew } = require('prismarine-physics/index')
 const { Physics: PhysicsOld, PlayerState: PlayerStateOld } = require('prismarine-physics/indexold')
 const { Vec3 } = require('vec3')
+const { f32, f32add } = require('../lib/math')
+const { JavaFloat } = require('../lib/javamath')
 const mcData = require('minecraft-data')('1.8.9')
 const Block = require('prismarine-block')('1.8.9')
 
-const stoneBlock = new Block(mcData.blocksByName.stone.id, 0, 0)
+const stoneBlock = new Block(mcData.blocksByName.obsidian.id, 0, 0)
 const airBlock = new Block(mcData.blocksByName.air.id, 0, 0)
 
 const fakeWorld = {
@@ -28,8 +30,6 @@ function getPlayerState (pos) {
       isCollidedVertically: false,
       yawDegrees: 0,
       pitchDegrees: 0,
-      yaw: 0,
-      pitch: 0,
       effects: {}
     },
     jumpTicks: 0,
@@ -68,15 +68,16 @@ for (let i = 0; i < ticks; i++) {
     playerStateNew.control[randomControlChange] = !playerStateNew.control[randomControlChange]
   }
   if (Math.random() > 0.95) {
-    const randomDYaw = (Math.random() * 0.4 - 0.2) * Math.PI / 2
-    playerStateOld.yaw += randomDYaw
-    playerStateNew.yaw += randomDYaw
+    const randomDYaw = (Math.random() * 0.4 - 0.2) * 360 / 2
+    playerStateOld.yawDegrees = playerStateOld.yawDegrees.add(new JavaFloat(randomDYaw))
+    playerStateNew.yawDegrees = f32add(playerStateNew.yawDegrees, f32(randomDYaw))
   }
   if (Math.random() > 0.95) {
-    const randomDPitch = (Math.random() * 0.4 - 0.2) * Math.PI / 2
-    playerStateOld.pitch += randomDPitch
-    playerStateNew.pitch += randomDPitch
+    const randomDPitch = (Math.random() * 0.4 - 0.2) * 360 / 2
+    playerStateOld.pitchDegrees = playerStateOld.pitchDegrees.add(new JavaFloat(randomDPitch))
+    playerStateNew.pitchDegrees = f32add(playerStateNew.pitchDegrees, f32(randomDPitch))
   }
+  // console.log(playerStateOld.yawDegrees.valueOf(), playerStateNew.yawDegrees.valueOf())
   let previousState = JSON.stringify(playerStateNew)
   physOld.simulatePlayer(playerStateOld, fakeWorld)
   physNew.simulatePlayer(playerStateNew, fakeWorld)
