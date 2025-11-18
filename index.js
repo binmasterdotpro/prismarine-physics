@@ -187,19 +187,19 @@ function Physics (_mcData, world) {
   function updateFenceBB (connectDirection, boundingBox) {
     switch (connectDirection) {
       case 0: // north (-z)
-              // extends from center to full north edge
+        // extends from center to full north edge
         boundingBox.push([0.375, 0.0, 0.0, 0.625, 1.5, 0.375])
         break
       case 1: // east (+x)
-              // extends from center to full east edge
+        // extends from center to full east edge
         boundingBox.push([0.625, 0.0, 0.375, 1.0, 1.5, 0.625])
         break
       case 2: // south (+z)
-              // extends from center to full south edge
+        // extends from center to full south edge
         boundingBox.push([0.375, 0.0, 0.625, 0.625, 1.5, 1.0])
         break
       case 3: // west (-x)
-              // extends from center to full west edge
+        // extends from center to full west edge
         boundingBox.push([0.0, 0.0, 0.375, 0.375, 1.5, 0.625])
         break
     }
@@ -1189,8 +1189,8 @@ class PlayerState {
     // Input only (not modified)
     this.attributes = bot.entity.attributes
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-    this.yawDegrees = typeof bot.entity.yawDegrees === 'number' ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
-    this.pitchDegrees = typeof bot.entity.pitchDegrees === 'number' ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
+    this.yawDegrees = typeof bot.entity.yawDegrees?.valueOf() === 'number' ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
+    this.pitchDegrees = typeof bot.entity.pitchDegrees?.valueOf() === 'number' ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
 
     this.control = control
 
