@@ -7,9 +7,19 @@ const { performance } = require('perf_hooks')
 const stoneBlock = new Block(mcData.blocksByName.stone.id, 0, 0)
 const airBlock = new Block(mcData.blocksByName.air.id, 0, 0)
 
+function minimalBlock(block) {
+  return {
+    type: block.type,
+    shapes: block.shapes,
+    boundingBox: block.boundingBox,
+    position: block.position
+  }
+}
+
+// required block properties: type, shapes, boundingBox, position
 const fakeWorld = {
   getBlock: (pos) => {
-    const b = (pos.y < 60) ? stoneBlock : airBlock
+    const b = (pos.y < 60) ? minimalBlock(stoneBlock) : minimalBlock(airBlock)
     b.position = pos
     return b
   }

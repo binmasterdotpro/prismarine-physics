@@ -1235,4 +1235,50 @@ class PlayerState {
   }
 }
 
-module.exports = { Physics, PlayerState }
+// a fast implementation of only the parts of the prismarine world needed for physics
+class FastWorld {
+  static #stateToBlock = {}
+
+  static {
+    const shapes = mcData.blockCollisionShapes
+    for (const stateId in mcData.blocksByStateId) {
+      const block = mcData.blocksByStateId[stateId]
+      const shapesId = shapes.blocks[block.name]
+      const baseShape = (shapesId instanceof Array) ? shapes.shapes[shapesId[0]] : shapes.shapes[shapesId]
+      const minStateId = block.minStateId
+
+      let shape = baseShape
+      if (shapesId instanceof Array) {
+        shape = shapes.shapes[shapesId[stateId - minStateId]]
+      }
+      if (!shape) {
+        console.warn(`No shape for block ${block.name}, stateId ${stateId}!`)
+        shape = [[0, 0, 0, 1, 1, 1]]
+      }
+      FastWorld.#stateToBlock[stateId] = {
+        type: block.id,
+        boundingBox: block.boundingBox,
+        shapes: baseShape,
+      }
+    }
+  }
+
+  constructor (bot) {
+    this.bot = bot
+  }
+
+  getBlock (pos) {
+    const chunk = this.bot.world.getColumnAt(pos)
+    if (!chunk) return null
+    const section = chunk.getBlockStateId(pos)
+    if (section === undefined) return null
+    const blockData = FastWorld.#stateToBlock[section]
+    if (!blockData) throw new Error(`No block data for state ID ${section}`)
+    return {
+      ...blockData,
+      position: pos.clone(),
+    }
+  }
+}
+
+module.exports = { Physics, PlayerState, FastWorld }
