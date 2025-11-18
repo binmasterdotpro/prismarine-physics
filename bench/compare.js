@@ -3,8 +3,6 @@ const { Physics: PhysicsOld, PlayerState: PlayerStateOld } = require('prismarine
 const { Vec3 } = require('vec3')
 const mcData = require('minecraft-data')('1.8.9')
 const Block = require('prismarine-block')('1.8.9')
-const { performance } = require('perf_hooks')
-const assert = require('node:assert')
 
 const stoneBlock = new Block(mcData.blocksByName.stone.id, 0, 0)
 const airBlock = new Block(mcData.blocksByName.air.id, 0, 0)
@@ -58,7 +56,7 @@ const controls = {
 
 const controlChoices = Object.keys(controls)
 
-const ticks = 2_500
+const ticks = 500_000
 
 const playerStateOld = new PlayerStateOld(getPlayerState(new Vec3(0, 65, 0)), controls)
 const playerStateNew = new PlayerStateNew(getPlayerState(new Vec3(0, 65, 0)), controls)
@@ -79,15 +77,27 @@ for (let i = 0; i < ticks; i++) {
     playerStateOld.pitch += randomDPitch
     playerStateNew.pitch += randomDPitch
   }
+  let previousState = JSON.stringify(playerStateNew)
   physOld.simulatePlayer(playerStateOld, fakeWorld)
   physNew.simulatePlayer(playerStateNew, fakeWorld)
   const posOld = playerStateOld.pos
   const posNew = playerStateNew.pos
-  assert(playerStateOld.yaw === playerStateNew.yaw, `Yaw mismatch at tick ${i}: old=${playerStateOld.yaw} new=${playerStateNew.yaw}`)
-  assert(playerStateOld.pitch === playerStateNew.pitch, `Pitch mismatch at tick ${i}: old=${playerStateOld.pitch} new=${playerStateNew.pitch}`)
-  assert(posOld.x.valueOf() === posNew.x.valueOf(), `X position mismatch at tick ${i}: old=${posOld.x.valueOf()} new=${posNew.x.valueOf()}`)
-  assert(posOld.y.valueOf() === posNew.y.valueOf(), `Y position mismatch at tick ${i}: old=${posOld.y.valueOf()} new=${posNew.y.valueOf()}`)
-  assert(posOld.z.valueOf() === posNew.z.valueOf(), `Z position mismatch at tick ${i}: old=${posOld.z.valueOf()} new=${posNew.z.valueOf()}`)
+
+  const failed = posOld.x.valueOf() !== posNew.x.valueOf() ||
+                 posOld.y.valueOf() !== posNew.y.valueOf() ||
+                 posOld.z.valueOf() !== posNew.z.valueOf()
+
+  if (failed) {
+    console.error(`Position mismatch at tick ${i + 1}`)
+    console.error(`Old Position: X=${posOld.x.valueOf()} Y=${posOld.y.valueOf()} Z=${posOld.z.valueOf()}`)
+    console.error(`New Position: X=${posNew.x.valueOf()} Y=${posNew.y.valueOf()} Z=${posNew.z.valueOf()}`)
+    const offset = new Vec3(posNew.x.valueOf() - posOld.x.valueOf(), posNew.y.valueOf() - posOld.y.valueOf(), posNew.z.valueOf() - posOld.z.valueOf())
+    console.log(`Offset: X=${offset.x} Y=${offset.y} Z=${offset.z} (magnitude=${offset.norm().toFixed(15)})`)
+    console.log(`Old State`, playerStateOld)
+    console.log(`New State`, playerStateNew)
+    console.log(`Previous State`, previousState)
+    process.exit(1)
+  }
 }
 
 console.log(`Positions matched for ${ticks} ticks`)

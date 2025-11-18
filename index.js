@@ -5,7 +5,6 @@ const nbt = require('prismarine-nbt')
 const AABB = require('./lib/aabb')
 const features = require('./lib/features')
 const attribute = require('./lib/attribute')
-const { JavaFloat, JavaDouble, sin32, cos32, JavaInt, Vec3Double } = require('./lib/javamath')
 const { IntSet } = require('./lib/util')
 const { f32, f32div, f32mul, f32sin, f32cos, f32add, f32sub, clamp } = require('./lib/math')
 
@@ -1062,15 +1061,15 @@ function Physics (_mcData, world) {
           const belowBlock = world.getBlock(adjPos.offset(0, -1, 0))
           adjLevel = getRenderedDepth(belowBlock)
           if (adjLevel >= 0) {
-            const k = new JavaDouble(adjLevel - (curLevel - 8))
-            flow.x = flow.x.add(new JavaDouble(dx).multiply(k))
-            flow.z = flow.z.add(new JavaDouble(dz).multiply(k))
+            const k = adjLevel - (curLevel - 8)
+            flow.x += dx * k
+            flow.z += dz * k
           }
         }
       } else {
-        const l = new JavaDouble(adjLevel - curLevel)
-        flow.x = flow.x.add(new JavaDouble(dx).multiply(l))
-        flow.z = flow.z.add(new JavaDouble(dz).multiply(l))
+        const l = adjLevel - curLevel
+        flow.x += dx * l
+        flow.z += dz * l
       }
     }
 
@@ -1085,7 +1084,7 @@ function Physics (_mcData, world) {
         const solidUp = (sideUpBlock && sideUpBlock.boundingBox !== 'empty')
         if (solidSide || solidUp) {
           flow.normalize()
-          flow.y = flow.y.add(new JavaDouble(-6.0))
+          flow.y += -6.0
           break // only apply once!
         }
       }
