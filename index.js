@@ -1258,13 +1258,13 @@ class FastWorld {
       const baseShape = (shapesId instanceof Array) ? shapes.shapes[shapesId[0]] : shapes.shapes[shapesId]
       const minStateId = block.minStateId
 
-      let shape = baseShape
+      let blockShapes = baseShape
       if (shapesId instanceof Array) {
-        shape = shapes.shapes[shapesId[stateId - minStateId]]
+        blockShapes = shapes.shapes[shapesId[stateId - minStateId]]
       }
-      if (!shape) {
+      if (!blockShapes) {
         console.warn(`No shape for block ${block.name}, stateId ${stateId}!`)
-        shape = [[0, 0, 0, 1, 1, 1]]
+        blockShapes = [[0, 0, 0, 1, 1, 1]]
       }
       // equivalent to stateId % 16 or stateId - minStateId
       const metadata = stateId & 15
@@ -1281,8 +1281,8 @@ class FastWorld {
       FastWorld.#stateToBlock[stateId] = {
         type: block.id,
         boundingBox: block.boundingBox,
-        shapes: baseShape,
-        _properties: _properties
+        shapes: blockShapes,
+        _properties
       }
     }
   }
