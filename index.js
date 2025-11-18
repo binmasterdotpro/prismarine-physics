@@ -1187,15 +1187,11 @@ class PlayerState {
     this.jumpQueued = bot.jumpQueued
     this.fireworkRocketDuration = bot.fireworkRocketDuration
 
-    console.log(bot.entity.yawDegrees)
-
     // Input only (not modified)
     this.attributes = bot.entity.attributes
     // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
     this.yawDegrees = typeof bot.entity.yawDegrees?.valueOf() === 'number' ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
     this.pitchDegrees = typeof bot.entity.pitchDegrees?.valueOf() === 'number' ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
-
-    console.log(bot.entity.yawDegrees, this.yawDegrees)
 
     this.control = control
 
