@@ -932,7 +932,7 @@ function Physics (_mcData, world) {
       motion.x *= inertia
       motion.y *= physics.waterInertia
       motion.z *= inertia
-      motion.y = physics.waterGravity
+      motion.y -= physics.waterGravity
       if (playerState.isCollidedHorizontally && isOffsetPositionInLiquid(world, pos.offset(motion.x, motion.y + 0.6 - pos.y + lastY, motion.z))) {
         motion.y = physics.outOfLiquidImpulse
       }
