@@ -514,6 +514,22 @@ function Physics (_mcData, world) {
 
   const snowLayerId = blocksByName.snow_layer.id
 
+  function getSuroundingBlocks (world, queryBB) {
+    const surroundingBlocks = []
+    const cursor = new Vec3(0, 0, 0)
+    for (cursor.y = Math.floor(queryBB.minY) - 1; cursor.y <= Math.floor(queryBB.maxY); cursor.y++) {
+      for (cursor.z = Math.floor(queryBB.minZ); cursor.z <= Math.floor(queryBB.maxZ); cursor.z++) {
+        for (cursor.x = Math.floor(queryBB.minX); cursor.x <= Math.floor(queryBB.maxX); cursor.x++) {
+          const block = world.getBlock(cursor)
+          if (block) {
+            surroundingBlocks.push(block)
+          }
+        }
+      }
+    }
+    return surroundingBlocks
+  }
+
   function getSurroundingBBs (world, queryBB) {
     const surroundingBBs = []
     const cursor = new Vec3(0, 0, 0)
@@ -548,6 +564,319 @@ function Physics (_mcData, world) {
       }
     }
     return surroundingBBs
+  }
+
+  // protected BlockPos getOnPos(float var1) {
+  //   if (this.mainSupportingBlockPos.isPresent()) {
+  //     BlockPos var5 = (BlockPos)this.mainSupportingBlockPos.get();
+  //     if (!(var1 > 1.0E-5F)) {
+  //       return var5;
+  //     } else {
+  //       BlockState var6 = this.level().getBlockState(var5);
+  //       return (!((double)var1 <= 0.5) || !var6.is(BlockTags.FENCES)) && !var6.is(BlockTags.WALLS) && !(var6.getBlock() instanceof FenceGateBlock) ? var5.atY(Mth.floor(this.position.y - (double)var1)) : var5;
+  //     }
+  //   } else {
+  //     int var2 = Mth.floor(this.position.x);
+  //     int var3 = Mth.floor(this.position.y - (double)var1);
+  //     int var4 = Mth.floor(this.position.z);
+  //     return new BlockPos(var2, var3, var4);
+  //   }
+  // }
+
+  //    protected void checkSupportingBlock(boolean var1, @Nullable Vec3 var2) {
+  //       if (var1) {
+  //          AABB var3 = this.getBoundingBox();
+  //          AABB var4 = new AABB(var3.minX, var3.minY - 1.0E-6, var3.minZ, var3.maxX, var3.minY, var3.maxZ);
+  //          Optional var5 = this.level.findSupportingBlock(this, var4);
+  //          if (!var5.isPresent() && !this.onGroundNoBlocks) {
+  //             if (var2 != null) {
+  //                AABB var6 = var4.move(-var2.x, 0.0, -var2.z);
+  //                var5 = this.level.findSupportingBlock(this, var6);
+  //                this.mainSupportingBlockPos = var5;
+  //             }
+  //          } else {
+  //             this.mainSupportingBlockPos = var5;
+  //          }
+  //
+  //          this.onGroundNoBlocks = var5.isEmpty();
+  //       } else {
+  //          this.onGroundNoBlocks = false;
+  //          if (this.mainSupportingBlockPos.isPresent()) {
+  //             this.mainSupportingBlockPos = Optional.empty();
+  //          }
+  //       }
+  //
+  //    }
+
+  physics.getOnPos = (playerState, world, offsetY) => {
+    const pos = playerState.position
+    const supportingBlockPos = playerState.getSupportingBlock(playerState, world)
+    if (supportingBlockPos) {
+      if (offsetY <= 1.0e-5) {
+        return supportingBlockPos
+      } else {
+        const block = world.getBlock(supportingBlockPos)
+        if ((!offsetY <= 0.5 || !block.isFence()) && !block.isWall() && !block.isFenceGate()) {
+          return new Vec3(supportingBlockPos.x, Math.floor(pos.y - offsetY), supportingBlockPos.z)
+        } else {
+          return new Vec3(supportingBlockPos.x, supportingBlockPos.y, supportingBlockPos.z)
+        }
+      }
+    } else {
+      const x = Math.floor(pos.x)
+      const y = Math.floor(pos.y - offsetY)
+      const z = Math.floor(pos.z)
+      return new Vec3(x, y, z)
+    }
+  }
+
+  physics.getBlockPosBelowThatAffectsMyMovement = (playerState, world) => {
+    return physics.getOnPos(f32(0.500001))
+  }
+
+  physics.travelInAir = (playerState, world) => {
+  //   BlockPos var2 = this.getBlockPosBelowThatAffectsMyMovement();
+    //       float var3 = this.onGround() ? this.level().getBlockState(var2).getBlock().getFriction() : 1.0F;
+    //       float var4 = var3 * 0.91F;
+    //       Vec3 var5 = this.handleRelativeFrictionAndCalculateMovement(var1, var3);
+    //       double var6 = var5.y;
+    //       MobEffectInstance var8 = this.getEffect(MobEffects.LEVITATION);
+    //       if (var8 != null) {
+    //          var6 += (0.05 * (double)(var8.getAmplifier() + 1) - var5.y) * 0.2;
+    //       } else if (this.level().isClientSide && !this.level().hasChunkAt(var2)) {
+    //          if (this.getY() > (double)this.level().getMinY()) {
+    //             var6 = -0.1;
+    //          } else {
+    //             var6 = 0.0;
+    //          }
+    //       } else {
+    //          var6 -= this.getEffectiveGravity();
+    //       }
+    //
+    //       if (this.shouldDiscardFriction()) {
+    //          this.setDeltaMovement(var5.x, var6, var5.z);
+    //       } else {
+    //          float var9 = this instanceof FlyingAnimal ? var4 : 0.98F;
+    //          this.setDeltaMovement(var5.x * (double)var4, var6 * (double)var9, var5.z * (double)var4);
+    //       }
+    const blockBelow = physics.getBlockPosBelowThatAffectsMyMovement(playerState, world)
+  }
+
+  // public void move(MoverType var1, Vec3 var2) {
+  //       if (this.noPhysics) {
+  //          this.setPos(this.getX() + var2.x, this.getY() + var2.y, this.getZ() + var2.z);
+  //       } else {
+  //          if (var1 == MoverType.PISTON) {
+  //             var2 = this.limitPistonMovement(var2);
+  //             if (var2.equals(Vec3.ZERO)) {
+  //                return;
+  //             }
+  //          }
+  //
+  //          ProfilerFiller var3 = Profiler.get();
+  //          var3.push("move");
+  //          if (this.stuckSpeedMultiplier.lengthSqr() > 1.0E-7) {
+  //             var2 = var2.multiply(this.stuckSpeedMultiplier);
+  //             this.stuckSpeedMultiplier = Vec3.ZERO;
+  //             this.setDeltaMovement(Vec3.ZERO);
+  //          }
+  //
+  //          var2 = this.maybeBackOffFromEdge(var2, var1);
+  //          Vec3 var4 = this.collide(var2);
+  //          double var5 = var4.lengthSqr();
+  //          if (var5 > 1.0E-7 || var2.lengthSqr() - var5 < 1.0E-7) {
+  //             if (this.fallDistance != 0.0 && var5 >= 1.0) {
+  //                BlockHitResult var7 = this.level().clip(new ClipContext(this.position(), this.position().add(var4), ClipContext.Block.FALLDAMAGE_RESETTING, ClipContext.Fluid.WATER, this));
+  //                if (var7.getType() != HitResult.Type.MISS) {
+  //                   this.resetFallDistance();
+  //                }
+  //             }
+  //
+  //             Vec3 var15 = this.position();
+  //             ObjectArrayList var8 = new ObjectArrayList();
+  //
+  //             for(Direction.Axis var10 : axisStepOrder(var4)) {
+  //                double var11 = var4.get(var10);
+  //                if (var11 != 0.0) {
+  //                   Vec3 var13 = var15.relative(var10.getPositive(), var11);
+  //                   var8.add(new Movement(var15, var13));
+  //                   var15 = var13;
+  //                }
+  //             }
+  //
+  //             this.movementThisTick.add(var8);
+  //             this.setPos(var15);
+  //          }
+  //
+  //          var3.pop();
+  //          var3.push("rest");
+  //          boolean var16 = !Mth.equal(var2.x, var4.x);
+  //          boolean var17 = !Mth.equal(var2.z, var4.z);
+  //          this.horizontalCollision = var16 || var17;
+  //          if (Math.abs(var2.y) > 0.0 || this.isLocalInstanceAuthoritative()) {
+  //             this.verticalCollision = var2.y != var4.y;
+  //             this.verticalCollisionBelow = this.verticalCollision && var2.y < 0.0;
+  //             this.setOnGroundWithMovement(this.verticalCollisionBelow, this.horizontalCollision, var4);
+  //          }
+  //
+  //          if (this.horizontalCollision) {
+  //             this.minorHorizontalCollision = this.isHorizontalCollisionMinor(var4);
+  //          } else {
+  //             this.minorHorizontalCollision = false;
+  //          }
+  //
+  //          BlockPos var18 = this.getOnPosLegacy();
+  //          BlockState var19 = this.level().getBlockState(var18);
+  //          if (this.isLocalInstanceAuthoritative()) {
+  //             this.checkFallDamage(var4.y, this.onGround(), var19, var18);
+  //          }
+  //
+  //          if (this.isRemoved()) {
+  //             var3.pop();
+  //          } else {
+  //             if (this.horizontalCollision) {
+  //                Vec3 var20 = this.getDeltaMovement();
+  //                this.setDeltaMovement(var16 ? 0.0 : var20.x, var20.y, var17 ? 0.0 : var20.z);
+  //             }
+  //
+  //             if (this.canSimulateMovement()) {
+  //                Block var21 = var19.getBlock();
+  //                if (var2.y != var4.y) {
+  //                   var21.updateEntityMovementAfterFallOn(this.level(), this);
+  //                }
+  //             }
+  //
+  //             if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
+  //                MovementEmission var22 = this.getMovementEmission();
+  //                if (var22.emitsAnything() && !this.isPassenger()) {
+  //                   this.applyMovementEmissionAndPlaySound(var22, var4, var18, var19);
+  //                }
+  //             }
+  //
+  //             float var23 = this.getBlockSpeedFactor();
+  //             this.setDeltaMovement(this.getDeltaMovement().multiply((double)var23, 1.0, (double)var23));
+  //             var3.pop();
+  //          }
+  //       }
+  //    }
+  physics.move = () => {
+
+  }
+
+
+// default Optional<BlockPos> findSupportingBlock(Entity var1, AABB var2) {
+//     BlockPos var3 = null;
+//     double var4 = 1.7976931348623157E308;
+//     BlockCollisions var6 = new BlockCollisions(this, var1, var2, false, (var0, var1x) -> var0);
+//
+//     while(var6.hasNext()) {
+//       BlockPos var7 = (BlockPos)var6.next();
+//       double var8 = var7.distToCenterSqr(var1.position());
+//       if (var8 < var4 || var8 == var4 && (var3 == null || var3.compareTo(var7) < 0)) {
+//         var3 = var7.immutable();
+//         var4 = var8;
+//       }
+//     }
+//
+//     return Optional.ofNullable(var3);
+//   }
+
+  //    public double distToCenterSqr(double var1, double var3, double var5) {
+  //       double var7 = (double)this.getX() + 0.5 - var1;
+  //       double var9 = (double)this.getY() + 0.5 - var3;
+  //       double var11 = (double)this.getZ() + 0.5 - var5;
+  //       return var7 * var7 + var9 * var9 + var11 * var11;
+  //    }
+
+  // public int compareTo(Vec3i var1) {
+  //       if (this.getY() == var1.getY()) {
+  //          return this.getZ() == var1.getZ() ? this.getX() - var1.getX() : this.getZ() - var1.getZ();
+  //       } else {
+  //          return this.getY() - var1.getY();
+  //       }
+  //    }
+
+  physics.distToCenterSqr = (blockPos, position) => {
+    const dx = (blockPos.x + 0.5) - position.x
+    const dy = (blockPos.y + 0.5) - position.y
+    const dz = (blockPos.z + 0.5) - position.z
+    return dx * dx + dy * dy + dz * dz
+  }
+
+  physics.Vec3I_compareTo = (a, b) => {
+    if (a.y === b.y) {
+      if (a.z === b.z) {
+        return a.x - b.x
+      } else {
+        return a.z - b.z
+      }
+    } else {
+      return a.y - b.y
+    }
+  }
+
+  physics.findSupportingBlock = (playerState, world, queryBB) => {
+    let closestPos = null
+    let closestDistSqr = 1.7976931348623157E308
+    const surroundingBlocks = getSuroundingBlocks(world, queryBB)
+    for (const block of surroundingBlocks) {
+      const blockPos = block.position.floored()
+      const distSqr = physics.distToCenterSqr(blockPos, playerState.pos)
+      if (distSqr < closestDistSqr || (distSqr === closestDistSqr && (closestPos === null || physics.Vec3I_compareTo(blockPos, closestPos) < 0))) {
+        closestPos = blockPos
+        closestDistSqr = distSqr
+      }
+    }
+    return closestPos
+  }
+
+  //    protected void checkSupportingBlock(boolean var1, @Nullable Vec3 var2) {
+  //       if (var1) {
+  //          AABB var3 = this.getBoundingBox();
+  //          AABB var4 = new AABB(var3.minX, var3.minY - 1.0E-6, var3.minZ, var3.maxX, var3.minY, var3.maxZ);
+  //          Optional var5 = this.level.findSupportingBlock(this, var4);
+  //          if (!var5.isPresent() && !this.onGroundNoBlocks) {
+  //             if (var2 != null) {
+  //                AABB var6 = var4.move(-var2.x, 0.0, -var2.z);
+  //                var5 = this.level.findSupportingBlock(this, var6);
+  //                this.mainSupportingBlockPos = var5;
+  //             }
+  //          } else {
+  //             this.mainSupportingBlockPos = var5;
+  //          }
+  //
+  //          this.onGroundNoBlocks = var5.isEmpty();
+  //       } else {
+  //          this.onGroundNoBlocks = false;
+  //          if (this.mainSupportingBlockPos.isPresent()) {
+  //             this.mainSupportingBlockPos = Optional.empty();
+  //          }
+  //       }
+  //
+  //    }
+  physics.getSupportingBlock = (playerState, world) => {
+    const playerBB = getPlayerBB(playerState.pos)
+    const queryBB = new AABB(
+      playerBB.minX,
+      playerBB.minY - 0.000001,
+      playerBB.minZ,
+      playerBB.maxX,
+      playerBB.minY,
+      playerBB.maxZ
+    )
+    const motion = playerState.motion
+
+    const supportingBlockPos = physics.findSupportingBlock(playerState, world, queryBB)
+    if (!supportingBlockPos) {
+      // try offset BB by -motion.xz
+      if (motion) {
+        const offsetBB = queryBB.move(-motion.x, 0.0, -motion.z)
+        return physics.findSupportingBlock(playerState, world, offsetBB)
+      }
+    } else {
+      return supportingBlockPos
+    }
+    return false
   }
 
   // run one tick of player simulation
