@@ -1,27 +1,22 @@
+// physics based on the 1.21.5 client
+// reference code: client/net/minecraft/world/entity/LivingEntity.java,
+// client/net/minecraft/world/entity/player/Player.java,
+// client/net/minecraft/world/entity/Entity.java
+
 const Vec3 = require('vec3').Vec3
 const mcData = require('minecraft-data')('1.8.9')
-const mcDataRegistry = require('minecraft-data')
-const nbt = require('prismarine-nbt')
 
 const AABB = require('./lib/aabb')
-const features = require('./lib/features')
 const attribute = require('./lib/attribute')
 const { IntSet } = require('./lib/util')
 const { f32, f32div, f32mul, f32sin, f32cos, f32add, f32sub, clamp } = require('./lib/math')
-
-function makeSupportFeature () {
-  return feature => features.some(({
-    name,
-    versions
-  }) => name === feature && versions.includes(mcData.version.majorVersion))
-}
+const { Vec3I } = require('./lib/vec')
 
 // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1578C42-L1578C53
 const DEG_TO_RAD = f32div(f32(Math.PI), f32(180.0))
 const RAD_TO_DEG = 180.0 / Math.PI
 
-function Physics (_mcData, world) {
-  const supportFeature = makeSupportFeature(mcData)
+function Physics (world) {
   const blocksByName = mcData.blocksByName
 
   const physics = {
@@ -631,7 +626,7 @@ function Physics (_mcData, world) {
   }
 
   physics.getBlockPosBelowThatAffectsMyMovement = (playerState, world) => {
-    return physics.getOnPos(f32(0.500001))
+    return physics.getOnPos(playerState, world, f32(0.500001))
   }
 
   physics.travelInAir = (playerState, world) => {
@@ -820,7 +815,7 @@ function Physics (_mcData, world) {
     let closestDistSqr = 1.7976931348623157E308
     const surroundingBlocks = getSuroundingBlocks(world, queryBB)
     for (const block of surroundingBlocks) {
-      const blockPos = block.position.floored()
+      const blockPos = Vec3I.fromVec3(block.position)
       const distSqr = physics.distToCenterSqr(blockPos, playerState.pos)
       if (distSqr < closestDistSqr || (distSqr === closestDistSqr && (closestPos === null || physics.Vec3I_compareTo(blockPos, closestPos) < 0))) {
         closestPos = blockPos
@@ -1319,8 +1314,7 @@ function Physics (_mcData, world) {
 
       moveEntity(playerState, world, motion.x, motion.y, motion.z)
 
-      if (isOnLadder(world, pos) && (playerState.isCollidedHorizontally ||
-        (supportFeature('climbUsingJump') && playerState.control.jump))) {
+      if (isOnLadder(world, pos) && (playerState.isCollidedHorizontally)) {
         motion.y = physics.ladderClimbSpeed // climb ladder
       }
 
@@ -1470,169 +1464,4 @@ function Physics (_mcData, world) {
   return physics
 }
 
-// already accounts for the + 1
-function getEffectLevel (mcData, effectName, effects) {
-  const effectDescriptor = mcData.effectsByName[effectName]
-  if (!effectDescriptor) {
-    return 0
-  }
-  const effectInfo = effects[effectDescriptor.id]
-  if (!effectInfo) {
-    return 0
-  }
-  return effectInfo.amplifier + 1
-}
-
-function getEnchantmentLevel (mcData, enchantmentName, enchantments) {
-  const enchantmentDescriptor = mcData.enchantmentsByName[enchantmentName]
-  if (!enchantmentDescriptor) {
-    return 0
-  }
-
-  for (const enchInfo of enchantments) {
-    if (typeof enchInfo.id === 'string') {
-      if (enchInfo.id.includes(enchantmentName)) {
-        return enchInfo.lvl
-      }
-    } else if (enchInfo.id === enchantmentDescriptor.id) {
-      return enchInfo.lvl
-    }
-  }
-  return 0
-}
-
-class PlayerState {
-  constructor (bot, control) {
-    this.pos = bot.entity.position.clone()
-    this.motion = bot.entity.velocity.clone()
-
-    this.onGround = bot.entity.onGround
-    this.isInWater = bot.entity.isInWater
-    this.isInLava = bot.entity.isInLava
-    this.isInWeb = bot.entity.isInWeb
-    this.isCollidedHorizontally = bot.entity.isCollidedHorizontally
-    this.isCollidedVertically = bot.entity.isCollidedVertically
-    this.jumpTicks = bot.jumpTicks
-    this.jumpQueued = bot.jumpQueued
-    this.fireworkRocketDuration = bot.fireworkRocketDuration
-
-    // Input only (not modified)
-    this.attributes = bot.entity.attributes
-    // both rotational values in degrees (notchian format). they should be float32 to replicate what the server should receive
-    this.yawDegrees = typeof bot.entity.yawDegrees?.valueOf() === 'number' ? f32(bot.entity.yawDegrees) : f32((Math.PI - bot.entity.yaw) * RAD_TO_DEG)
-    this.pitchDegrees = typeof bot.entity.pitchDegrees?.valueOf() === 'number' ? f32(bot.entity.pitchDegrees) : f32(-bot.entity.pitch * RAD_TO_DEG)
-
-    this.control = control
-
-    // effects
-    const effects = bot.entity.effects
-    this.jumpBoost = getEffectLevel(mcData, 'JumpBoost', effects)
-    // armour enchantments
-    const boots = bot.inventory.slots[8]
-    if (boots && boots.nbt) {
-      const simplifiedNbt = nbt.simplify(boots.nbt)
-      const enchantments = simplifiedNbt.Enchantments ?? simplifiedNbt.ench ?? []
-      const enchantmentsMap = boots?.componentMap?.get('enchantments')
-      const strider = enchantmentsMap?.data?.enchantments?.find(({ id, level }) => id === 7)
-      this.depthStrider = strider ? strider.level : getEnchantmentLevel(mcData, 'depth_strider', enchantments)
-    } else {
-      this.depthStrider = 0
-    }
-  }
-
-  apply (bot) {
-    bot.entity.position = new Vec3(
-      this.pos.x.valueOf(),
-      this.pos.y.valueOf(),
-      this.pos.z.valueOf()
-    )
-    bot.entity.velocity = new Vec3(
-      this.motion.x.valueOf(),
-      this.motion.y.valueOf(),
-      this.motion.z.valueOf()
-    )
-    bot.entity.onGround = this.onGround
-    bot.entity.isInWater = this.isInWater
-    bot.entity.isInLava = this.isInLava
-    bot.entity.isInWeb = this.isInWeb
-    bot.entity.isCollidedHorizontally = this.isCollidedHorizontally
-    bot.entity.isCollidedVertically = this.isCollidedVertically
-    bot.jumpTicks = this.jumpTicks
-    bot.jumpQueued = this.jumpQueued
-    bot.fireworkRocketDuration = this.fireworkRocketDuration
-  }
-}
-
-// a fast implementation of only the parts of the prismarine world needed for physics
-class FastWorld {
-  static #stateToBlock = {}
-
-  static {
-    const shapes = mcData.blockCollisionShapes
-    const legacyPcBlocksByIdmeta = Object.entries(mcDataRegistry.legacy.pc.blocks).reduce((obj, [idmeta, name]) => {
-      const s = name.split('[')[1]?.replace(']', '')
-      obj[idmeta] = s
-        ? Object.fromEntries(s.split(',').map(s => {
-          let [k, v] = s.split('=')
-          if (!isNaN(parseInt(v))) v = parseInt(v)
-          return [k, v]
-        }))
-        : {}
-      return obj // array of { '255:0': { mode: 'save' }, }
-    }, {})
-
-    for (const stateId in mcData.blocksByStateId) {
-      const block = mcData.blocksByStateId[stateId]
-      const shapesId = shapes.blocks[block.name]
-      const baseShape = (shapesId instanceof Array) ? shapes.shapes[shapesId[0]] : shapes.shapes[shapesId]
-      const minStateId = block.minStateId
-
-      let blockShapes = baseShape
-      if (shapesId instanceof Array) {
-        blockShapes = shapes.shapes[shapesId[stateId - minStateId]]
-      }
-      if (!blockShapes) {
-        console.warn(`No shape for block ${block.name}, stateId ${stateId}!`)
-        blockShapes = [[0, 0, 0, 1, 1, 1]]
-      }
-      // equivalent to stateId % 16 or stateId - minStateId
-      const metadata = stateId & 15
-      let _properties = legacyPcBlocksByIdmeta[block.id + ':' + metadata] || legacyPcBlocksByIdmeta[block.id + ':0']
-      if (!_properties) {
-        for (let i = 0; i <= 15; i++) {
-          _properties = legacyPcBlocksByIdmeta[block.id + ':' + i]
-          if (_properties) break
-        }
-      }
-      if (!_properties) {
-        console.warn(`No legacy properties for block ${block.name}, stateId ${stateId}, id:meta ${block.id}:${metadata}`)
-      }
-      FastWorld.#stateToBlock[stateId] = {
-        type: block.id,
-        boundingBox: block.boundingBox,
-        shapes: blockShapes,
-        _properties
-      }
-    }
-  }
-
-  constructor (bot) {
-    this.bot = bot
-  }
-
-  getBlock (pos) {
-    pos = pos.floored()
-    const chunk = this.bot.world.getColumnAt(pos)
-    if (!chunk) return null
-    const section = chunk.getBlockStateId(pos)
-    if (section === undefined) return null
-    const blockData = FastWorld.#stateToBlock[section]
-    if (!blockData) throw new Error(`No block data for state ID ${section}`)
-    return {
-      ...blockData,
-      position: pos,
-    }
-  }
-}
-
-module.exports = { Physics, PlayerState, FastWorld }
+module.exports = { Physics }
