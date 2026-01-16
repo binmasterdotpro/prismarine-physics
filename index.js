@@ -11,6 +11,8 @@ const attribute = require('./lib/attribute')
 const { IntSet } = require('./lib/util')
 const { f32, f32div, f32mul, f32sin, f32cos, f32add, f32sub, clamp } = require('./lib/math')
 const { Vec3I } = require('./lib/vec')
+const assert = require('node:assert')
+const { getAttributeValue } = require('./lib/attribute')
 
 // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1578C42-L1578C53
 const DEG_TO_RAD = f32div(f32(Math.PI), f32(180.0))
@@ -80,11 +82,7 @@ function Physics (world) {
   const waterIds = [blocksByName.water.id, blocksByName.flowing_water ? blocksByName.flowing_water.id : -1]
   const lavaIds = [blocksByName.lava.id, blocksByName.flowing_lava ? blocksByName.flowing_lava.id : -1]
   const liquidIds = waterIds.concat(lavaIds)
-  const blockSlipperiness = {}
   const slimeBlockId = blocksByName.slime_block ? blocksByName.slime_block.id : blocksByName.slime.id
-  blockSlipperiness[slimeBlockId] = f32(0.8)
-  blockSlipperiness[blocksByName.ice.id] = f32(0.98)
-  blockSlipperiness[blocksByName.packed_ice.id] = f32(0.98)
 
   const soulsandId = blocksByName.soul_sand.id
   const webId = blocksByName.cobweb ? blocksByName.cobweb.id : blocksByName.web.id
@@ -92,6 +90,7 @@ function Physics (world) {
   const vineId = blocksByName.vine.id
 
   function getPlayerBB (pos) {
+    // todo: account for different poses and states
     const w = physics.playerHalfWidth
     return new AABB(-w, 0, -w, w, physics.playerHeight, w).offset(pos.x, pos.y, pos.z)
   }
@@ -207,7 +206,7 @@ function Physics (world) {
     // check north, east, south, west for neighboring walls to connect to
     for (let i = 0; i < CARDINAL.length; i++) {
       // update the wall properties and the bounding box
-      const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
+      const neighborBlock = world.getBlockState(origin.plus(CARDINAL[i]))
       if (!neighborBlock || !wallIds.has(neighborBlock.type)) continue
       updateWallBB(i, baseBoundingBox)
     }
@@ -218,7 +217,7 @@ function Physics (world) {
     const baseBoundingBox = [[0.375, 0.0, 0.375, 0.625, 1.5, 0.625]]
     for (let i = 0; i < CARDINAL.length; i++) {
       // update the fence properties and the bounding box
-      const neighborBlock = world.getBlock(origin.plus(CARDINAL[i]))
+      const neighborBlock = world.getBlockState(origin.plus(CARDINAL[i]))
       if (!neighborBlock || (!fenceIds.has(neighborBlock.type) && !fenceGateIds.has(neighborBlock.type))) continue
       updateFenceBB(i, baseBoundingBox)
     }
@@ -252,8 +251,8 @@ function Physics (world) {
   function computeStairShape (world, pos, facing, halfTop) {
     const forwardPos = pos.plus(CARDINAL[facing])
     const backPos = pos.minus(CARDINAL[facing])
-    const forward = world.getBlock(forwardPos)
-    const back = world.getBlock(backPos)
+    const forward = world.getBlockState(forwardPos)
+    const back = world.getBlockState(backPos)
 
     function sameHalf (block) {
       return block && stairIds.has(block.type) && isTopHalf(block) === halfTop
@@ -471,7 +470,7 @@ function Physics (world) {
     }
 
     // Get neighboring blocks
-    const neighbors = CARDINAL.map(dir => world.getBlock(origin.plus(dir)))
+    const neighbors = CARDINAL.map(dir => world.getBlockState(origin.plus(dir)))
     const [north, east, south, west] = neighbors
 
     const canConnectNorth = canConnect(north)
@@ -515,7 +514,7 @@ function Physics (world) {
     for (cursor.y = Math.floor(queryBB.minY) - 1; cursor.y <= Math.floor(queryBB.maxY); cursor.y++) {
       for (cursor.z = Math.floor(queryBB.minZ); cursor.z <= Math.floor(queryBB.maxZ); cursor.z++) {
         for (cursor.x = Math.floor(queryBB.minX); cursor.x <= Math.floor(queryBB.maxX); cursor.x++) {
-          const block = world.getBlock(cursor)
+          const block = world.getBlockState(cursor)
           if (block) {
             surroundingBlocks.push(block)
           }
@@ -531,7 +530,7 @@ function Physics (world) {
     for (cursor.y = Math.floor(queryBB.minY) - 1; cursor.y <= Math.floor(queryBB.maxY); cursor.y++) {
       for (cursor.z = Math.floor(queryBB.minZ); cursor.z <= Math.floor(queryBB.maxZ); cursor.z++) {
         for (cursor.x = Math.floor(queryBB.minX); cursor.x <= Math.floor(queryBB.maxX); cursor.x++) {
-          const block = world.getBlock(cursor)
+          const block = world.getBlockState(cursor)
           if (block) {
             const blockPos = block.position
             let shapes = block.shapes
@@ -544,7 +543,7 @@ function Physics (world) {
             } else if (glassPaneIds.has(block.type)) {
               shapes = computePaneBB(world, blockPos)
             } else if (block.type === snowLayerId && block._properties.layers === 8) {
-              const blockAbove = world.getBlock(blockPos.offset(0, 1, 0))
+              const blockAbove = world.getBlockState(blockPos.offset(0, 1, 0))
               if (blockAbove && blockAbove.type === snowLayerId) {
                 shapes = [[0, 0, 0, 1, 1, 1]]
               }
@@ -568,7 +567,7 @@ function Physics (world) {
   //       return var5;
   //     } else {
   //       BlockState var6 = this.level().getBlockState(var5);
-  //       return (!((double)var1 <= 0.5) || !var6.is(BlockTags.FENCES)) && !var6.is(BlockTags.WALLS) && !(var6.getBlock() instanceof FenceGateBlock) ? var5.atY(Mth.floor(this.position.y - (double)var1)) : var5;
+  //       return (!((double)var1 <= 0.5) || !var6.is(BlockTags.FENCES)) && !var6.is(BlockTags.WALLS) && !(var6.getBlockState() instanceof FenceGateBlock) ? var5.atY(Mth.floor(this.position.y - (double)var1)) : var5;
   //     }
   //   } else {
   //     int var2 = Mth.floor(this.position.x);
@@ -578,43 +577,20 @@ function Physics (world) {
   //   }
   // }
 
-  //    protected void checkSupportingBlock(boolean var1, @Nullable Vec3 var2) {
-  //       if (var1) {
-  //          AABB var3 = this.getBoundingBox();
-  //          AABB var4 = new AABB(var3.minX, var3.minY - 1.0E-6, var3.minZ, var3.maxX, var3.minY, var3.maxZ);
-  //          Optional var5 = this.level.findSupportingBlock(this, var4);
-  //          if (!var5.isPresent() && !this.onGroundNoBlocks) {
-  //             if (var2 != null) {
-  //                AABB var6 = var4.move(-var2.x, 0.0, -var2.z);
-  //                var5 = this.level.findSupportingBlock(this, var6);
-  //                this.mainSupportingBlockPos = var5;
-  //             }
-  //          } else {
-  //             this.mainSupportingBlockPos = var5;
-  //          }
-  //
-  //          this.onGroundNoBlocks = var5.isEmpty();
-  //       } else {
-  //          this.onGroundNoBlocks = false;
-  //          if (this.mainSupportingBlockPos.isPresent()) {
-  //             this.mainSupportingBlockPos = Optional.empty();
-  //          }
-  //       }
-  //
-  //    }
-
+  // offsetY: f32
   physics.getOnPos = (playerState, world, offsetY) => {
+    assert(f32(offsetY) === offsetY, 'offsetY must be f32')
     const pos = playerState.position
-    const supportingBlockPos = playerState.getSupportingBlock(playerState, world)
+    const supportingBlockPos = physics.getSupportingBlock(playerState, world)
     if (supportingBlockPos) {
-      if (offsetY <= 1.0e-5) {
+      if (!(offsetY > f32(1.0E-5))) {
         return supportingBlockPos
       } else {
-        const block = world.getBlock(supportingBlockPos)
-        if ((!offsetY <= 0.5 || !block.isFence()) && !block.isWall() && !block.isFenceGate()) {
-          return new Vec3(supportingBlockPos.x, Math.floor(pos.y - offsetY), supportingBlockPos.z)
+        const block = world.getBlockState(supportingBlockPos)
+        if ((!(offsetY <= 0.5) || !block.blockTags.FENCE) && !block.blockTags.WALL && !block.blockTags.FENCE_GATE) {
+          return supportingBlockPos.atY(Math.floor(pos.y - offsetY))
         } else {
-          return new Vec3(supportingBlockPos.x, supportingBlockPos.y, supportingBlockPos.z)
+          return supportingBlockPos
         }
       }
     } else {
@@ -629,9 +605,81 @@ function Physics (world) {
     return physics.getOnPos(playerState, world, f32(0.500001))
   }
 
+
+  // todo: confirm that deltaMovement is equivalent to playerState.motion
+  //       GRAVITY = register("gravity", (new RangedAttribute("attribute.name.gravity", 0.08, -1.0, 1.0)).setSyncable(true).setSentiment(Attribute.Sentiment.NEUTRAL));
+  // seems like gravity is now an attribute! gg!
+
+  physics.getGravity = (playerState, world) => {
+    const gravity = playerState.attributes['gravity']
+    if (gravity !== undefined) {
+      return attribute.getAttributeValue(gravity)
+    }
+    return f32(0.08)
+  }
+
+  // double
+  physics.getEffectiveGravity = (playerState, world) => {
+    return playerState.motion.y <= 0.0 && playerState.slowFalling ? Math.min(physics.getGravity(), 0.01) : physics.getGravity();
+  }
+
+  physics.setMovementDelta = (playerState, velX, velY, velZ) => {
+    playerState.motion.x = velX
+    playerState.motion.y = velY
+    playerState.motion.z = velZ
+  }
+
+  // float
+  physics.getSpeed = (playerState, world) => {
+    // return this.speed;
+    // from Player.aiStep
+    //       this.setSpeed((float)this.getAttributeValue(Attributes.MOVEMENT_SPEED));
+    const movementSpeedAttr = playerState.attributes[physics.movementSpeedAttribute]
+    if (movementSpeedAttr !== undefined) {
+      return attribute.getAttributeValue(movementSpeedAttr)
+    }
+    return f32(0.1)
+  }
+
+  // float
+  physics.getFlyingSpeed = (playerState, world) => {
+    //    protected float getFlyingSpeed() {
+    //       return this.getControllingPassenger() instanceof Player ? this.getSpeed() * 0.1F : 0.02F;
+    //    }
+    return f32mul(physics.getSpeed(playerState, world), 0.1)
+  }
+
+  physics.getFrictionInfluencedSpeed = (playerState, world, friction) => {
+    //    private float getFrictionInfluencedSpeed(float var1) {
+    //       return this.onGround() ? this.getSpeed() * (0.21600002F / (var1 * var1 * var1)) : this.getFlyingSpeed();
+    //    }
+    if (playerState.onGround) {
+      return physics.getSpeed(playerState, world) * (0.21600002 / (friction * friction * friction))
+    } else {
+      return physics.getFlyingSpeed(playerState)
+    }
+  }
+
+  physics.handleRelativeFrictionAndCalculateMovement = (playerState, world, friction) => {
+    //       this.moveRelative(this.getFrictionInfluencedSpeed(var2), var1);
+    //       this.setDeltaMovement(this.handleOnClimbable(this.getDeltaMovement()));
+    //       this.move(MoverType.SELF, this.getDeltaMovement());
+    //       Vec3 var3 = this.getDeltaMovement();
+    //       if ((this.horizontalCollision || this.jumping) && (this.onClimbable() || this.wasInPowderSnow && PowderSnowBlock.canEntityWalkOnPowderSnow(this))) {
+    //          var3 = new Vec3(var3.x, 0.2, var3.z);
+    //       }
+    //
+    //       return var3;
+    physics.moveRelative(
+      playerState,
+      physics.getFrictionInfluencedSpeed(playerState, friction)
+    )
+
+  }
+
   physics.travelInAir = (playerState, world) => {
   //   BlockPos var2 = this.getBlockPosBelowThatAffectsMyMovement();
-    //       float var3 = this.onGround() ? this.level().getBlockState(var2).getBlock().getFriction() : 1.0F;
+    //       float var3 = this.onGround() ? this.level().getBlockState(var2).getBlockState().getFriction() : 1.0F;
     //       float var4 = var3 * 0.91F;
     //       Vec3 var5 = this.handleRelativeFrictionAndCalculateMovement(var1, var3);
     //       double var6 = var5.y;
@@ -654,7 +702,91 @@ function Physics (world) {
     //          float var9 = this instanceof FlyingAnimal ? var4 : 0.98F;
     //          this.setDeltaMovement(var5.x * (double)var4, var6 * (double)var9, var5.z * (double)var4);
     //       }
-    const blockBelow = physics.getBlockPosBelowThatAffectsMyMovement(playerState, world)
+    const blockPosBelow = physics.getBlockPosBelowThatAffectsMyMovement(playerState, world)
+    const blockBelow = world.getBlockState(blockPosBelow)
+    const friction = playerState.onGround ? (blockBelow ? blockBelow.friction : f32(0.6)) : f32(1.0)
+    const frictionMul = f32mul(friction * f32(0.91))
+    const moveVec = physics.handleRelativeFrictionAndCalculateMovement(playerState, world, friction)
+    // double
+    let velY = moveVec.y
+    const levitationAmplifier = playerState.levitation
+    if (levitationAmplifier > 0) {
+      velY += (0.05 * (levitationAmplifier) - moveVec.y) * 0.2
+    } else if (!world.hasChunkAt(blockPosBelow)) {
+      if (playerState.position.y > world.minY) {
+        velY = -0.1
+      } else {
+        velY = 0.0
+      }
+    } else {
+      velY -= physics.getEffectiveGravity(playerState)
+    }
+    if (physics.shouldDiscardFriction(playerState)) {
+      physics.setMovementDelta(
+        playerState,
+        moveVec.x,
+        velY,
+        moveVec.z
+      )
+    } else {
+      // player is never a flying animal!
+      const verticalFriction = f32(0.98)
+      physics.setMovementDelta(
+        playerState,
+        moveVec.x * frictionMul,
+        velY * verticalFriction,
+        moveVec.z * frictionMul
+      )
+    }
+  }
+
+  // protected Vec3 maybeBackOffFromEdge(Vec3 var1, MoverType var2) {
+  //       float var3 = this.maxUpStep();
+  //       if (!this.abilities.flying && !(var1.y > 0.0) && (var2 == MoverType.SELF || var2 == MoverType.PLAYER) && this.isStayingOnGroundSurface() && this.isAboveGround(var3)) {
+  //          double var4 = var1.x;
+  //          double var6 = var1.z;
+  //          double var8 = 0.05;
+  //          double var10 = Math.signum(var4) * 0.05;
+  //
+  //          double var12;
+  //          for(var12 = Math.signum(var6) * 0.05; var4 != 0.0 && this.canFallAtLeast(var4, 0.0, (double)var3); var4 -= var10) {
+  //             if (Math.abs(var4) <= 0.05) {
+  //                var4 = 0.0;
+  //                break;
+  //             }
+  //          }
+  //
+  //          while(var6 != 0.0 && this.canFallAtLeast(0.0, var6, (double)var3)) {
+  //             if (Math.abs(var6) <= 0.05) {
+  //                var6 = 0.0;
+  //                break;
+  //             }
+  //
+  //             var6 -= var12;
+  //          }
+  //
+  //          while(var4 != 0.0 && var6 != 0.0 && this.canFallAtLeast(var4, var6, (double)var3)) {
+  //             if (Math.abs(var4) <= 0.05) {
+  //                var4 = 0.0;
+  //             } else {
+  //                var4 -= var10;
+  //             }
+  //
+  //             if (Math.abs(var6) <= 0.05) {
+  //                var6 = 0.0;
+  //             } else {
+  //                var6 -= var12;
+  //             }
+  //          }
+  //
+  //          return new Vec3(var4, var1.y, var6);
+  //       } else {
+  //          return var1;
+  //       }
+  //    }
+
+  physics.maybeBackOffFromEdge = (playerState, moveVec, world) => {
+
   }
 
   // public void move(MoverType var1, Vec3 var2) {
@@ -735,7 +867,7 @@ function Physics (world) {
   //             }
   //
   //             if (this.canSimulateMovement()) {
-  //                Block var21 = var19.getBlock();
+  //                Block var21 = var19.getBlockState();
   //                if (var2.y != var4.y) {
   //                   var21.updateEntityMovementAfterFallOn(this.level(), this);
   //                }
@@ -817,7 +949,8 @@ function Physics (world) {
     for (const block of surroundingBlocks) {
       const blockPos = Vec3I.fromVec3(block.position)
       const distSqr = physics.distToCenterSqr(blockPos, playerState.pos)
-      if (distSqr < closestDistSqr || (distSqr === closestDistSqr && (closestPos === null || physics.Vec3I_compareTo(blockPos, closestPos) < 0))) {
+      if (distSqr < closestDistSqr ||
+        (distSqr === closestDistSqr && (closestPos === null || blockPos.compareTo(closestPos) < 0))) {
         closestPos = blockPos
         closestDistSqr = distSqr
       }
@@ -849,29 +982,29 @@ function Physics (world) {
   //       }
   //
   //    }
+
+
   physics.getSupportingBlock = (playerState, world) => {
     const playerBB = getPlayerBB(playerState.pos)
     const queryBB = new AABB(
       playerBB.minX,
-      playerBB.minY - 0.000001,
+      playerBB.minY - 1.0E-6,
       playerBB.minZ,
       playerBB.maxX,
       playerBB.minY,
       playerBB.maxZ
     )
-    const motion = playerState.motion
-
     const supportingBlockPos = physics.findSupportingBlock(playerState, world, queryBB)
+
     if (!supportingBlockPos) {
-      // try offset BB by -motion.xz
-      if (motion) {
-        const offsetBB = queryBB.move(-motion.x, 0.0, -motion.z)
+      if (playerState.motion) {
+        const offsetBB = queryBB.move(-playerState.motion.x, 0.0, -playerState.motion.z)
         return physics.findSupportingBlock(playerState, world, offsetBB)
       }
     } else {
       return supportingBlockPos
     }
-    return false
+    return null
   }
 
   // run one tick of player simulation
@@ -909,7 +1042,7 @@ function Physics (world) {
     if (Math.abs(motion.z) < physics.negligeableVelocity) motion.z = 0.0
 
     // Handle inputs
-    if (playerState.control.jump || playerState.jumpQueued) {
+    if (playerState.input.jump || playerState.jumpQueued) {
       // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1589
       if (playerState.isInWater || playerState.isInLava) {
         motion.y += physics.liquidMotionY
@@ -919,9 +1052,9 @@ function Physics (world) {
           // compliance: can do += here, because it takes the double representation of the f32mul
           motion.y += f32mul(f32(playerState.jumpBoost), physics.jumpBoostConstant)
         }
-        let forward = (playerState.control.forward - playerState.control.back)
-        const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
-        if (playerState.control.sprint && isSprintingApplicable) {
+        let forward = (playerState.input.forward - playerState.input.back)
+        const isSprintingApplicable = forward > 0 && !playerState.input.sneak && !playerState.isInWater && !playerState.isInLava
+        if (playerState.input.sprint && isSprintingApplicable) {
           // notchian yaw is inverted
           const notchianYaw = f32mul(playerState.yawDegrees, DEG_TO_RAD)
           // compliance: can do -= and += here, because it also takes the double representation of the f32mul
@@ -936,11 +1069,11 @@ function Physics (world) {
     playerState.jumpQueued = false
 
     // movestrafing and moveforward are in range [-1.0, 1.0], already stored as F32
-    let moveStrafing = f32(playerState.control.right - playerState.control.left)
-    let moveForward = f32(playerState.control.forward - playerState.control.back)
+    let moveStrafing = f32(playerState.input.right - playerState.input.left)
+    let moveForward = f32(playerState.input.forward - playerState.input.back)
 
     // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/util/MovementInputFromOptions.java#L42C1-L46C10
-    if (playerState.control.sneak) {
+    if (playerState.input.sneak) {
       moveStrafing = f32(moveStrafing * physics.sneakSpeed)
       moveForward = f32(moveForward * physics.sneakSpeed)
     }
@@ -972,7 +1105,7 @@ function Physics (world) {
     let oldVelY = dy
     let oldVelZ = dz
 
-    const validSneak = playerState.control.sneak && playerState.onGround
+    const validSneak = playerState.input.sneak && playerState.onGround
 
     if (validSneak) {
       const step = 0.05
@@ -1114,10 +1247,10 @@ function Physics (world) {
     playerState.onGround = playerState.isCollidedVertically && oldVelY < 0
 
     let blockPos = pos.offset(0, -0.2, 0).floored()
-    let blockAtFeet = world.getBlock(blockPos)
+    let blockAtFeet = world.getBlockState(blockPos)
 
     if (blockAtFeet?.type === 0) {
-      const downBlock = world.getBlock(blockPos.offset(0, -1, 0))
+      const downBlock = world.getBlockState(blockPos.offset(0, -1, 0))
 
       if (wallIds.has(downBlock.type) || fenceIds.has(downBlock.type) || fenceGateIds.has(downBlock.type)) {
         blockAtFeet = downBlock
@@ -1132,7 +1265,7 @@ function Physics (world) {
       motion.z = 0.0
     }
     if (dy !== oldVelY) {
-      if (blockAtFeet && blockAtFeet.type === slimeBlockId && !playerState.control.sneak) {
+      if (blockAtFeet && blockAtFeet.type === slimeBlockId && !playerState.input.sneak) {
         motion.y = -motion.y
       } else {
         motion.y = 0
@@ -1151,7 +1284,7 @@ function Physics (world) {
     for (cursor.x = Math.floor(playerBB.minX); cursor.x <= Math.floor(playerBB.maxX); cursor.x++) {
       for (cursor.y = Math.floor(playerBB.minY); cursor.y <= Math.floor(playerBB.maxY); cursor.y++) {
         for (cursor.z = Math.floor(playerBB.minZ); cursor.z <= Math.floor(playerBB.maxZ); cursor.z++) {
-          const block = world.getBlock(cursor)
+          const block = world.getBlockState(cursor)
           if (block) {
             if (block.type === soulsandId) {
               motion.x *= physics.soulsandSpeed
@@ -1189,12 +1322,11 @@ function Physics (world) {
   }
 
   function isOnLadder (world, pos) {
-    const block = world.getBlock(pos)
+    const block = world.getBlockState(pos)
     if (!block) {
       return false
     }
     return block.type === ladderId || block.type === vineId
-
   }
 
   function isOffsetPositionInLiquid (world, pos) {
@@ -1219,8 +1351,8 @@ function Physics (world) {
     // setSprinting in LivingEntity.java
     playerSpeedAttribute = attribute.deleteAttributeModifier(playerSpeedAttribute, physics.sprintingUUID) // always delete sprinting (if it exists)
 
-    const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
-    if (playerState.control.sprint && isSprintingApplicable && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
+    const isSprintingApplicable = forward > 0 && !playerState.input.sneak && !playerState.isInWater && !playerState.isInLava
+    if (playerState.input.sprint && isSprintingApplicable && !attribute.checkAttributeModifier(playerSpeedAttribute, physics.sprintingUUID)) {
       playerSpeedAttribute = attribute.addAttributeModifier(playerSpeedAttribute, {
         uuid: physics.sprintingUUID,
         amount: physics.sprintSpeed,
@@ -1275,7 +1407,7 @@ function Physics (world) {
       // Normal movement
       let inertia = physics.airborneInertia
       if (playerState.onGround) {
-        const blockUnder = world.getBlock(pos.floored().offset(0, -1, 0))
+        const blockUnder = world.getBlockState(pos.floored().offset(0, -1, 0))
         const slipperiness = blockUnder?.type && typeof blockSlipperiness[blockUnder.type] === 'number' ?
           blockSlipperiness[blockUnder.type] : physics.defaultSlipperiness
         inertia = f32mul(slipperiness, physics.airborneInertia)
@@ -1289,8 +1421,8 @@ function Physics (world) {
       } else {
         // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/player/EntityPlayer.java#L631
         let jumpMovementFactor = physics.airborneAcceleration
-        const isSprintingApplicable = forward > 0 && !playerState.control.sneak && !playerState.isInWater && !playerState.isInLava
-        if (playerState.control.sprint && isSprintingApplicable) {
+        const isSprintingApplicable = forward > 0 && !playerState.input.sneak && !playerState.isInWater && !playerState.isInLava
+        if (playerState.input.sprint && isSprintingApplicable) {
           jumpMovementFactor = f32(
             jumpMovementFactor + physics.airborneAcceleration * 0.3
           )
@@ -1307,7 +1439,7 @@ function Physics (world) {
           // clone it
           motion.y = -physics.ladderClimbSpeed
         }
-        if (playerState.control.sneak && motion.y < 0) {
+        if (playerState.input.sneak && motion.y < 0) {
           motion.y = 0
         }
       }
@@ -1320,7 +1452,7 @@ function Physics (world) {
 
       // unloaded chunks 1.8 behavior
       // https://github.com/Marcelektro/MCP-919/blob/1717f75902c6184a1ed1bfcd7880404aab4da503/src/minecraft/net/minecraft/entity/EntityLivingBase.java#L1664
-      if (!world.getBlock(new Vec3(pos.x, 0, pos.z).floored())) {
+      if (!world.getBlockState(new Vec3(pos.x, 0, pos.z).floored())) {
         if (pos.y > 0) {
           motion.y = -0.1
         } else {
@@ -1341,7 +1473,7 @@ function Physics (world) {
     for (cursor.y = Math.floor(queryBB.minY); cursor.y <= Math.floor(queryBB.maxY); cursor.y++) {
       for (cursor.z = Math.floor(queryBB.minZ); cursor.z <= Math.floor(queryBB.maxZ); cursor.z++) {
         for (cursor.x = Math.floor(queryBB.minX); cursor.x <= Math.floor(queryBB.maxX); cursor.x++) {
-          const block = world.getBlock(cursor)
+          const block = world.getBlockState(cursor)
           if (block && types.includes(block.type)) return true
         }
       }
@@ -1375,14 +1507,14 @@ function Physics (world) {
 
     for (const [dx, dz] of directions) {
       const adjPos = pos.offset(dx, 0, dz)
-      const adjBlock = world.getBlock(adjPos)
+      const adjBlock = world.getBlockState(adjPos)
       let adjLevel = getRenderedDepth(adjBlock)
 
       if (adjLevel < 0) {
         // block is "solid" if it blocks movement (non-empty bbox)
         const adjBlockStateSolid = adjBlock && adjBlock.boundingBox !== 'empty'
         if (!adjBlockStateSolid) {
-          const belowBlock = world.getBlock(adjPos.offset(0, -1, 0))
+          const belowBlock = world.getBlockState(adjPos.offset(0, -1, 0))
           adjLevel = getRenderedDepth(belowBlock)
           if (adjLevel >= 0) {
             const k = adjLevel - (curLevel - 8)
@@ -1402,8 +1534,8 @@ function Physics (world) {
       for (const [dx, dz] of directions) {
         const side = pos.offset(dx, 0, dz)
         const sideUp = pos.offset(dx, 1, dz)
-        const sideBlock = world.getBlock(side)
-        const sideUpBlock = world.getBlock(sideUp)
+        const sideBlock = world.getBlockState(side)
+        const sideUpBlock = world.getBlockState(sideUp)
         const solidSide = (sideBlock && sideBlock.boundingBox !== 'empty')
         const solidUp = (sideUpBlock && sideUpBlock.boundingBox !== 'empty')
         if (solidSide || solidUp) {
@@ -1434,7 +1566,7 @@ function Physics (world) {
     for (cursor.x = minX; cursor.x < maxX; cursor.x++) {
       for (cursor.y = minY; cursor.y < maxY; cursor.y++) {
         for (cursor.z = minZ; cursor.z < maxZ; cursor.z++) {
-          const block = world.getBlock(cursor)
+          const block = world.getBlockState(cursor)
           if (!block) continue
           if (waterIds.includes(block.type)) {
             const liquidHeight = (cursor.y + 1) - getLiquidHeightPcent(block)
